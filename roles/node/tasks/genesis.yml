@@ -1,20 +1,16 @@
 ---
 # Genesis Download Tasks
-
-- name: Check if genesis file exists
-  ansible.builtin.stat:
-    path: "{{ node_daemon_home }}/config/genesis.json"
-  register: node_genesis_stat
+# Always downloads the network genesis, overwriting the placeholder from `init`
 
 - name: Download genesis file
   ansible.builtin.get_url:
     url: "{{ node_genesis_url }}"
     dest: "{{ node_daemon_home }}/config/genesis.json"
     owner: "{{ node_daemon_user }}"
-    group: "{{ node_daemon_user }}"
-    mode: "0640"
+    group: "{{ node_daemon_group }}"
+    mode: "0644"
+    force: true
   become: true
-  when: not node_genesis_stat.stat.exists
 
 - name: Verify genesis file
   ansible.builtin.command: >
