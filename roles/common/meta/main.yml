@@ -1,0 +1,13 @@
+---
+galaxy_info:
+  author: Blockchain Ops
+  description: Common server hardening and base configuration
+  license: Apache-2.0
+  min_ansible_version: "2.14"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - jammy
+        - noble
+
+dependencies: []

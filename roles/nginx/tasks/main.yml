@@ -1,0 +1,233 @@
+---
+# =============================================================================
+# AURA Nginx Role - Tasks
+# =============================================================================
+# Community-standard nginx reverse proxy deployment
+# Non-destructive mode: preserves existing configs unless explicitly requested
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Pre-flight Checks
+# -----------------------------------------------------------------------------
+- name: Check if nginx is already installed
+  ansible.builtin.stat:
+    path: /etc/nginx/nginx.conf
+  register: nginx_installed
+
+- name: Check for existing chain-specific configs
+  ansible.builtin.find:
+    paths: /etc/nginx/conf.d
+    patterns: "*.conf"
+  register: nginx_existing_configs
+  failed_when: false
+
+- name: Set nginx_already_configured fact
+  ansible.builtin.set_fact:
+    nginx_already_configured: "{{ nginx_existing_configs.files | length > 0 }}"
+
+# -----------------------------------------------------------------------------
+# Package Installation
+# -----------------------------------------------------------------------------
+- name: Install Nginx and Certbot
+  ansible.builtin.apt:
+    name:
+      - nginx
+      - certbot
+      - python3-certbot-nginx
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+# -----------------------------------------------------------------------------
+# Directory Setup
+# -----------------------------------------------------------------------------
+- name: Create SSL directory
+  ansible.builtin.file:
+    path: /etc/nginx/ssl
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+
+- name: Create sites-available directory
+  ansible.builtin.file:
+    path: /etc/nginx/sites-available
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Create sites-enabled directory
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+# -----------------------------------------------------------------------------
+# Main Nginx Configuration
+# -----------------------------------------------------------------------------
+- name: Deploy main nginx.conf (security hardened)
+  ansible.builtin.template:
+    src: nginx.conf.j2
+    dest: /etc/nginx/nginx.conf
+    owner: root
+    group: root
+    mode: '0644'
+    backup: true
+    validate: nginx -t -c %s
+  notify: Reload nginx
+  when: nginx_manage_main_config | default(false) or nginx_force_install | default(false)
+
+# -----------------------------------------------------------------------------
+# Virtual Host Configuration
+# -----------------------------------------------------------------------------
+- name: Remove default site
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: Reload nginx
+  when: not nginx_already_configured or nginx_force_install | default(false)
+
+- name: Deploy AURA virtual hosts configuration
+  ansible.builtin.template:
+    src: vhost-aura.conf.j2
+    dest: /etc/nginx/sites-available/aura.conf
+    owner: root
+    group: root
+    mode: '0644'
+    backup: true
+  notify: Reload nginx
+  when: nginx_manage_vhosts | default(true)
+
+- name: Enable AURA virtual hosts
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/aura.conf
+    dest: /etc/nginx/sites-enabled/aura.conf
+    state: link
+  notify: Reload nginx
+  when: nginx_manage_vhosts | default(true)
+
+# -----------------------------------------------------------------------------
+# Upstream Configuration (for load balancing scenarios)
+# -----------------------------------------------------------------------------
+- name: Deploy upstream configuration
+  ansible.builtin.template:
+    src: upstream-aura.conf.j2
+    dest: /etc/nginx/conf.d/aura-upstream.conf
+    owner: root
+    group: root
+    mode: '0644'
+    backup: true
+  notify: Reload nginx
+  when: nginx_manage_upstreams | default(true)
+
+# -----------------------------------------------------------------------------
+# SSL Certificate Setup
+# -----------------------------------------------------------------------------
+- name: Check for existing SSL certificates
+  ansible.builtin.stat:
+    path: "/etc/letsencrypt/live/testnet-rpc.{{ nginx_domain }}/fullchain.pem"
+  register: nginx_ssl_cert_exists
+
+- name: Display SSL certificate status
+  ansible.builtin.debug:
+    msg: >
+      SSL certificates: {{ 'Present' if nginx_ssl_cert_exists.stat.exists else 'Not found - run certbot manually' }}
+
+- name: Obtain SSL certificates (if not present and certbot email configured)
+  ansible.builtin.command: >
+    certbot certonly --nginx --non-interactive --agree-tos
+    --email {{ nginx_certbot_email }}
+    -d testnet-rpc.{{ nginx_domain }}
+    -d testnet-api.{{ nginx_domain }}
+    -d testnet-grpc.{{ nginx_domain }}
+    -d testnet-ws.{{ nginx_domain }}
+    -d testnet-explorer.{{ nginx_domain }}
+    -d testnet-faucet.{{ nginx_domain }}
+    -d docs.{{ nginx_domain }}
+  when:
+    - not nginx_ssl_cert_exists.stat.exists
+    - nginx_certbot_email is defined
+    - nginx_ssl_enabled | default(true)
+  register: nginx_certbot_result
+  changed_when: nginx_certbot_result.rc == 0
+  failed_when: false
+
+# -----------------------------------------------------------------------------
+# Firewall Configuration
+# -----------------------------------------------------------------------------
+- name: Allow HTTP through UFW
+  community.general.ufw:
+    rule: allow
+    port: '80'
+    proto: tcp
+  failed_when: false
+
+- name: Allow HTTPS through UFW
+  community.general.ufw:
+    rule: allow
+    port: '443'
+    proto: tcp
+  failed_when: false
+
+# -----------------------------------------------------------------------------
+# Service Management
+# -----------------------------------------------------------------------------
+- name: Validate nginx configuration
+  ansible.builtin.command: nginx -t
+  register: nginx_test
+  changed_when: false
+  failed_when: nginx_test.rc != 0
+
+- name: Ensure Nginx is running and enabled
+  ansible.builtin.service:
+    name: nginx
+    state: started
+    enabled: true
+
+# -----------------------------------------------------------------------------
+# SSL Certificate Renewal
+# -----------------------------------------------------------------------------
+- name: Set up SSL certificate renewal cron
+  ansible.builtin.cron:
+    name: "Renew SSL certificates"
+    job: "certbot renew --quiet --post-hook 'systemctl reload nginx'"
+    hour: "{{ nginx_ssl_renewal_hour }}"
+    minute: "{{ nginx_ssl_renewal_minute }}"
+    day: "{{ nginx_ssl_renewal_day }}"
+  when: nginx_ssl_enabled | default(true)
+
+# -----------------------------------------------------------------------------
+# Status Output
+# -----------------------------------------------------------------------------
+- name: Display nginx configuration summary
+  ansible.builtin.debug:
+    msg: |
+      ============================================
+      Nginx Configuration Summary
+      ============================================
+      Status: {{ 'Configured (preserved existing)' if nginx_already_configured else 'Fresh install' }}
+      Domain: {{ nginx_domain }}
+      SSL: {{ 'Enabled' if nginx_ssl_enabled | default(true) else 'Disabled' }}
+      ============================================
+      Endpoints configured:
+      - https://testnet-rpc.{{ nginx_domain }}
+      - https://testnet-api.{{ nginx_domain }}
+      - https://testnet-grpc.{{ nginx_domain }}
+      - https://testnet-ws.{{ nginx_domain }}
+      - https://testnet-explorer.{{ nginx_domain }}
+      - https://testnet-faucet.{{ nginx_domain }}
+      - https://docs.{{ nginx_domain }}
+      ============================================
+      Security features:
+      - TLS 1.2/1.3 only
+      - HSTS enabled (1 year)
+      - Security headers (X-Frame-Options, X-Content-Type-Options, etc.)
+      - Rate limiting (API: {{ nginx_api_rate_limit }}, Faucet: {{ nginx_faucet_rate_limit }})
+      - CORS enabled for dApp integration
+      - HTTP → HTTPS redirect
+      ============================================
+      To force full reconfiguration: -e nginx_force_install=true
+      ============================================

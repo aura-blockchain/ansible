@@ -1,0 +1,377 @@
+---
+# =============================================================================
+# AURA BLOCKCHAIN - NODE MIGRATION
+# =============================================================================
+# Migrate a validator from one server to another
+#
+# This is a GUIDE playbook - migration requires multiple manual steps
+# to prevent double-signing. Use the individual playbooks in sequence.
+#
+# MIGRATION WORKFLOW:
+# ===================
+#
+# 1. Deploy target node (if not already done):
+#    ansible-playbook -i inventory/testnet.yml main.yml --limit TARGET_NODE
+#
+# 2. Sync target node:
+#    ansible-playbook -i inventory/testnet.yml support_state_sync.yml --limit TARGET_NODE
+#    # OR use snapshot:
+#    ansible-playbook -i inventory/testnet.yml support_sync_snapshot.yml --limit TARGET_NODE \
+#      -e snapshot_url=https://...
+#
+# 3. Backup keys from source:
+#    ansible-playbook -i inventory/testnet.yml support_backup_keys.yml --limit SOURCE_NODE
+#
+# 4. CRITICAL: Stop source node FIRST (prevent double-signing!):
+#    ssh SOURCE_SERVER "sudo systemctl stop SOURCE_SERVICE"
+#
+# 5. Restore keys to target:
+#    ansible-playbook -i inventory/testnet.yml support_restore_keys.yml --limit TARGET_NODE \
+#      -e backup_archive=/root/node-backups/BACKUP.tar.gz \
+#      -e confirm_restore=true
+#
+# 6. Start target node:
+#    ssh TARGET_SERVER "sudo systemctl start TARGET_SERVICE"
+#
+# 7. Verify target is signing:
+#    ssh TARGET_SERVER "curl -s http://127.0.0.1:26657/status | jq '.result.validator_info'"
+#
+# 8. (Optional) Remove source node:
+#    ansible-playbook -i inventory/testnet.yml support_remove_node.yml --limit SOURCE_NODE \
+#      -e confirm_removal=true
+#
+# =============================================================================
+# AUTOMATED MIGRATION (for advanced users)
+# =============================================================================
+# This playbook automates the above workflow. USE WITH CAUTION.
+#
+# Usage:
+#   ansible-playbook -i inventory/testnet.yml support_migrate_node.yml \
+#     -e source_host=aura_val1 \
+#     -e target_host=aura_val1_new \
+#     -e confirm_migration=true
+# =============================================================================
+
+- name: Validate Migration Parameters
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - name: Check required variables
+      ansible.builtin.fail:
+        msg: |
+          ============================================
+          MIGRATION REQUIRES PARAMETERS
+          ============================================
+          Required:
+            -e source_host=<inventory_hostname>
+            -e target_host=<inventory_hostname>
+            -e confirm_migration=true
+          ============================================
+          Example:
+            ansible-playbook -i inventory/testnet.yml support_migrate_node.yml \
+              -e source_host=aura_val1 \
+              -e target_host=aura_val1_new \
+              -e confirm_migration=true
+          ============================================
+      when: >
+        source_host is not defined or
+        target_host is not defined or
+        not (confirm_migration | default(false) | bool)
+
+    - name: Display migration plan
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          MIGRATION PLAN
+          ============================================
+          Source: {{ source_host }}
+          Target: {{ target_host }}
+          ============================================
+          Steps:
+          1. Backup keys from source
+          2. Stop target node
+          3. Transfer keys to target
+          4. STOP SOURCE NODE (critical!)
+          5. Start target node
+          6. Verify target health
+          ============================================
+
+    - name: Set migration facts for subsequent plays
+      ansible.builtin.set_fact:
+        migration_source: "{{ source_host }}"
+        migration_target: "{{ target_host }}"
+        migration_timestamp: "{{ ansible_date_time.iso8601_basic_short | default('migration') }}"
+      delegate_facts: true
+
+
+- name: Step 1 - Backup Keys from Source
+  hosts: all
+  become: true
+  gather_facts: true
+
+  vars:
+    backup_dir: "/root/node-backups"
+
+  tasks:
+    - name: Run only on source host
+      when: inventory_hostname == source_host
+      block:
+        - name: Display backup info
+          ansible.builtin.debug:
+            msg: "Backing up keys from {{ inventory_hostname }}"
+
+        - name: Create backup directory
+          ansible.builtin.file:
+            path: "{{ backup_dir }}"
+            state: directory
+            owner: root
+            group: root
+            mode: '0700'
+
+        - name: Create timestamped backup directory
+          ansible.builtin.file:
+            path: "{{ backup_dir }}/{{ node_name }}-migration"
+            state: directory
+            owner: root
+            group: root
+            mode: '0700'
+
+        - name: Backup validator keys
+          ansible.builtin.copy:
+            src: "{{ item.src }}"
+            dest: "{{ backup_dir }}/{{ node_name }}-migration/{{ item.name }}"
+            remote_src: true
+            owner: root
+            group: root
+            mode: '0600'
+          loop:
+            - { src: "{{ node_daemon_home }}/config/priv_validator_key.json", name: "priv_validator_key.json" }
+            - { src: "{{ node_daemon_home }}/config/node_key.json", name: "node_key.json" }
+            - { src: "{{ node_daemon_home }}/data/priv_validator_state.json", name: "priv_validator_state.json" }
+          failed_when: false
+
+        - name: Create backup archive
+          community.general.archive:
+            path: "{{ backup_dir }}/{{ node_name }}-migration"
+            dest: "{{ backup_dir }}/{{ node_name }}-migration.tar.gz"
+            format: gz
+            owner: root
+            group: root
+            mode: '0600'
+
+        - name: Fetch backup to control node
+          ansible.builtin.fetch:
+            src: "{{ backup_dir }}/{{ node_name }}-migration.tar.gz"
+            dest: "/tmp/migration-keys-{{ node_name }}.tar.gz"
+            flat: true
+
+        - name: Display backup location
+          ansible.builtin.debug:
+            msg: "Keys backed up to /tmp/migration-keys-{{ node_name }}.tar.gz"
+
+
+- name: Step 2 - Prepare Target Node
+  hosts: all
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Run only on target host
+      when: inventory_hostname == target_host
+      block:
+        - name: Check if node is deployed
+          ansible.builtin.stat:
+            path: "{{ node_daemon_home }}"
+          register: target_home
+
+        - name: Fail if target not deployed
+          ansible.builtin.fail:
+            msg: |
+              Target node not deployed. Run first:
+              ansible-playbook -i inventory/testnet.yml main.yml --limit {{ inventory_hostname }}
+          when: not target_home.stat.exists
+
+        - name: Stop target node
+          ansible.builtin.service:
+            name: "{{ node_service_name }}"
+            state: stopped
+          failed_when: false
+
+
+- name: Step 3 - Transfer Keys to Target
+  hosts: all
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Run only on target host
+      when: inventory_hostname == target_host
+      block:
+        - name: Find source node name
+          ansible.builtin.set_fact:
+            source_node_name: "{{ hostvars[source_host]['node_name'] }}"
+
+        - name: Copy backup to target
+          ansible.builtin.copy:
+            src: "/tmp/migration-keys-{{ source_node_name }}.tar.gz"
+            dest: /tmp/migration-keys.tar.gz
+            owner: root
+            group: root
+            mode: '0600'
+
+        - name: Create extract directory
+          ansible.builtin.file:
+            path: /tmp/migration-extract
+            state: directory
+            owner: root
+            group: root
+            mode: '0700'
+
+        - name: Extract backup
+          ansible.builtin.unarchive:
+            src: /tmp/migration-keys.tar.gz
+            dest: /tmp/migration-extract/
+            remote_src: true
+
+        - name: Find key files
+          ansible.builtin.find:
+            paths: /tmp/migration-extract/
+            patterns: "*.json"
+            recurse: true
+          register: key_files
+
+        - name: Restore priv_validator_key.json
+          ansible.builtin.copy:
+            src: "{{ item.path }}"
+            dest: "{{ node_daemon_home }}/config/priv_validator_key.json"
+            remote_src: true
+            owner: "{{ node_daemon_user }}"
+            group: "{{ node_daemon_group }}"
+            mode: '0600'
+          loop: "{{ key_files.files }}"
+          when: item.path is search('priv_validator_key.json')
+
+        - name: Restore node_key.json
+          ansible.builtin.copy:
+            src: "{{ item.path }}"
+            dest: "{{ node_daemon_home }}/config/node_key.json"
+            remote_src: true
+            owner: "{{ node_daemon_user }}"
+            group: "{{ node_daemon_group }}"
+            mode: '0600'
+          loop: "{{ key_files.files }}"
+          when: item.path is search('node_key.json')
+
+        - name: Restore priv_validator_state.json
+          ansible.builtin.copy:
+            src: "{{ item.path }}"
+            dest: "{{ node_daemon_home }}/data/priv_validator_state.json"
+            remote_src: true
+            owner: "{{ node_daemon_user }}"
+            group: "{{ node_daemon_group }}"
+            mode: '0600'
+          loop: "{{ key_files.files }}"
+          when: item.path is search('priv_validator_state.json')
+
+        - name: Clean up
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: absent
+          loop:
+            - /tmp/migration-extract
+            - /tmp/migration-keys.tar.gz
+
+
+- name: Step 4 - Stop Source Node (CRITICAL)
+  hosts: all
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Run only on source host
+      when: inventory_hostname == source_host
+      block:
+        - name: Display critical warning
+          ansible.builtin.debug:
+            msg: |
+              ============================================
+              STOPPING SOURCE NODE
+              ============================================
+              This prevents double-signing!
+              ============================================
+
+        - name: Stop source node service
+          ansible.builtin.service:
+            name: "{{ node_service_name }}"
+            state: stopped
+
+        - name: Disable source node service
+          ansible.builtin.service:
+            name: "{{ node_service_name }}"
+            enabled: false
+
+        - name: Verify source is stopped
+          ansible.builtin.systemd:
+            name: "{{ node_service_name }}"
+          register: source_status
+          failed_when: source_status.status.ActiveState == 'active'
+
+
+- name: Step 5 - Start Target Node
+  hosts: all
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Run only on target host
+      when: inventory_hostname == target_host
+      block:
+        - name: Start target node service
+          ansible.builtin.service:
+            name: "{{ node_service_name }}"
+            state: started
+            enabled: true
+
+        - name: Wait for RPC
+          ansible.builtin.wait_for:
+            port: "{{ node_rpc_port }}"
+            host: 127.0.0.1
+            delay: 10
+            timeout: 120
+
+
+- name: Step 6 - Verify Migration
+  hosts: all
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Run only on target host
+      when: inventory_hostname == target_host
+      block:
+        - name: Check node status
+          ansible.builtin.uri:
+            url: "http://127.0.0.1:{{ node_rpc_port }}/status"
+            method: GET
+            return_content: true
+          register: node_status
+          retries: 5
+          delay: 10
+
+        - name: Display migration result
+          ansible.builtin.debug:
+            msg: |
+              ============================================
+              MIGRATION COMPLETE
+              ============================================
+              Target: {{ inventory_hostname }}
+              Validator: {{ node_status.json.result.validator_info.address }}
+              Height: {{ node_status.json.result.sync_info.latest_block_height }}
+              Catching up: {{ node_status.json.result.sync_info.catching_up }}
+              ============================================
+              Source node ({{ source_host }}) is STOPPED.
+              To remove it completely:
+              ansible-playbook support_remove_node.yml --limit {{ source_host }} -e confirm_removal=true
+              ============================================

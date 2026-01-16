@@ -1,0 +1,43 @@
+---
+# Directory Setup Tasks
+
+- name: Ensure daemon user exists
+  ansible.builtin.user:
+    name: "{{ node_daemon_user }}"
+    state: present
+    shell: /bin/bash
+  become: true
+
+- name: Create daemon home directory
+  ansible.builtin.file:
+    path: "{{ node_daemon_home }}"
+    state: directory
+    owner: "{{ node_daemon_user }}"
+    group: "{{ node_daemon_group }}"
+    mode: "0755"
+  become: true
+
+- name: Create Cosmovisor directory structure
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ node_daemon_user }}"
+    group: "{{ node_daemon_group }}"
+    mode: "0755"
+  become: true
+  loop:
+    - "{{ node_daemon_home }}/cosmovisor"
+    - "{{ node_daemon_home }}/cosmovisor/genesis"
+    - "{{ node_daemon_home }}/cosmovisor/genesis/bin"
+    - "{{ node_daemon_home }}/cosmovisor/upgrades"
+    - "{{ node_daemon_home }}/config"
+    - "{{ node_daemon_home }}/data"
+
+- name: Create log directory
+  ansible.builtin.file:
+    path: "/var/log/{{ node_daemon_name }}"
+    state: directory
+    owner: "{{ node_daemon_user }}"
+    group: "{{ node_daemon_group }}"
+    mode: "0755"
+  become: true

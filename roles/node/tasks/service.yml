@@ -1,0 +1,45 @@
+---
+# Systemd Service Tasks
+
+- name: Set service name
+  ansible.builtin.set_fact:
+    node_service_name: "aurad-mvp-{{ node_name }}"
+
+- name: Deploy systemd service file
+  ansible.builtin.template:
+    src: aurad.service.j2
+    dest: "/etc/systemd/system/{{ node_service_name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  notify: Reload systemd
+
+- name: Flush handlers to reload systemd
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable AURA service
+  ansible.builtin.systemd:
+    name: "{{ node_service_name }}"
+    enabled: "{{ node_service_enabled }}"
+    daemon_reload: true
+  become: true
+
+- name: Start AURA service
+  ansible.builtin.systemd:
+    name: "{{ node_service_name }}"
+    state: "{{ node_service_state }}"
+  become: true
+  when: node_service_state != 'stopped'
+
+- name: Display service status
+  ansible.builtin.command: >
+    systemctl status {{ node_service_name }} --no-pager
+  become: true
+  register: node_service_status
+  changed_when: false
+  failed_when: false
+
+- name: Show service status
+  ansible.builtin.debug:
+    msg: "{{ node_service_status.stdout_lines }}"

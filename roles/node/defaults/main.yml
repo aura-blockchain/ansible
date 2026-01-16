@@ -1,0 +1,84 @@
+---
+# AURA Node Role - Default Variables
+
+# Go installation
+node_go_version: "1.23.0"
+node_go_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+node_go_download_url: "https://go.dev/dl/go{{ node_go_version }}.linux-{{ node_go_arch }}.tar.gz"
+
+# Cosmovisor
+node_cosmovisor_version: "v1.5.0"
+
+# Daemon configuration
+node_daemon_name: "aurad"
+node_daemon_user: "ubuntu"
+node_daemon_group: "ubuntu"
+node_daemon_home: "/home/{{ node_daemon_user }}/.aura-mvp-{{ node_name }}"
+
+# Chain configuration
+node_chain_id: "aura-mvp-1"
+node_bech_prefix: "aura"
+node_staking_denom: "uaura"
+node_name: "val1"
+node_type: "val"  # val or sentry
+node_number: 1
+
+# Network ports (standard Cosmos ports with offsets)
+node_rpc_port: 26657
+node_p2p_port: 26656
+node_grpc_port: 9090
+node_api_port: 1317
+node_pprof_port: 6060
+
+# Artifact URLs
+node_genesis_url: "https://artifacts.aurablockchain.org/aura-mvp-1/genesis.json"
+node_peers_url: "https://artifacts.aurablockchain.org/aura-mvp-1/peers.txt"
+
+# Binary source (set one of these)
+node_binary_url: ""  # URL to download aurad binary
+node_binary_path: "/tmp/aurad"  # Local path to aurad binary
+
+# Node configuration
+node_moniker: "{{ node_name }}"
+node_minimum_gas_prices: "0.025uaura"
+
+# Pruning configuration
+node_pruning: "default"
+node_pruning_keep_recent: "100"
+node_pruning_keep_every: "0"
+node_pruning_interval: "10"
+
+# P2P configuration
+node_persistent_peers: ""
+node_private_peer_ids: ""
+node_pex_enabled: true  # false for validators
+node_addr_book_strict: true
+node_max_num_inbound_peers: 40
+node_max_num_outbound_peers: 10
+
+# Validator-specific (for sentry nodes)
+node_validator_node_ids: []
+
+# API configuration
+node_api_enabled: true
+node_api_swagger: false
+
+# gRPC configuration
+node_grpc_enabled: true
+
+# Prometheus metrics
+node_prometheus_enabled: true
+node_prometheus_listen_addr: ":26660"
+
+# Cosmovisor environment
+node_cosmovisor_allow_download_binaries: false
+node_cosmovisor_restart_after_upgrade: true
+node_cosmovisor_log_buffer_size: 512
+
+# Firewall
+node_configure_firewall: true
+node_vpn_network: "10.10.0.0/24"
+
+# Service management
+node_service_enabled: true
+node_service_state: "started"

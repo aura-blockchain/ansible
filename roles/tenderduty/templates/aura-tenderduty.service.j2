@@ -1,0 +1,24 @@
+[Unit]
+Description=AURA Tenderduty - Validator monitoring and alerting
+Documentation=https://github.com/blockpane/tenderduty
+Wants=network-online.target
+After=network-online.target aurad-mvp-{{ node_type | default('val1') }}.service
+
+[Service]
+Type=simple
+User=tenderduty
+Group=tenderduty
+WorkingDirectory=/opt/tenderduty
+ExecStart=/opt/tenderduty/bin/tenderduty -f /opt/tenderduty/config/config.yml
+
+SyslogIdentifier=aura-tenderduty
+Restart=always
+RestartSec=5
+
+NoNewPrivileges=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/opt/tenderduty
+
+[Install]
+WantedBy=multi-user.target

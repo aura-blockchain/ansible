@@ -1,0 +1,94 @@
+---
+# =============================================================================
+# AURA Nginx Role - Default Variables
+# =============================================================================
+# Community-standard nginx configuration for blockchain public endpoints
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Worker Settings
+# -----------------------------------------------------------------------------
+nginx_worker_processes: auto
+nginx_worker_connections: 4096
+
+# -----------------------------------------------------------------------------
+# Non-destructive Mode Settings
+# -----------------------------------------------------------------------------
+# Set to true to force full nginx reconfiguration (overwrites existing)
+nginx_force_install: false
+
+# Set to true to manage nginx.conf (default: false to preserve existing)
+nginx_manage_main_config: false
+
+# Set to true to deploy upstream configs to conf.d
+nginx_manage_upstreams: true
+
+# Set to true to deploy virtual host configs
+nginx_manage_vhosts: true
+
+# -----------------------------------------------------------------------------
+# Domain Configuration
+# -----------------------------------------------------------------------------
+nginx_domain: "aurablockchain.org"
+
+# -----------------------------------------------------------------------------
+# Backend Port Configuration
+# -----------------------------------------------------------------------------
+nginx_rpc_port: 26657
+nginx_rest_port: 1317
+nginx_grpc_port: 9090
+nginx_ws_port: 26657
+nginx_explorer_port: 8082
+nginx_faucet_port: 8081
+
+# -----------------------------------------------------------------------------
+# Rate Limiting
+# -----------------------------------------------------------------------------
+# API endpoints (RPC, REST, gRPC)
+nginx_api_rate_limit: "10r/s"
+nginx_api_burst: 20
+
+# Faucet (stricter to prevent abuse)
+nginx_faucet_rate_limit: "2r/s"
+nginx_faucet_burst: 5
+
+# Connection limits per IP
+nginx_conn_limit: 10
+nginx_faucet_conn_limit: 5
+
+# -----------------------------------------------------------------------------
+# Request Size Limits
+# -----------------------------------------------------------------------------
+nginx_client_max_body_size: "1m"
+nginx_client_body_buffer_size: "16k"
+
+# -----------------------------------------------------------------------------
+# CORS Configuration
+# -----------------------------------------------------------------------------
+# Set to specific origin for production, "*" for development/testnet
+nginx_cors_origin: "*"
+
+# -----------------------------------------------------------------------------
+# SSL/TLS Configuration
+# -----------------------------------------------------------------------------
+nginx_ssl_enabled: true
+
+# Let's Encrypt certificate paths (set per-domain in vhost template)
+# Certificates are obtained via certbot and stored at:
+# /etc/letsencrypt/live/<domain>/fullchain.pem
+# /etc/letsencrypt/live/<domain>/privkey.pem
+
+# -----------------------------------------------------------------------------
+# Documentation Site
+# -----------------------------------------------------------------------------
+nginx_docs_root: "/var/www/docs"
+
+# -----------------------------------------------------------------------------
+# Certbot/Let's Encrypt
+# -----------------------------------------------------------------------------
+nginx_certbot_email: "admin@{{ nginx_domain }}"
+
+# SSL certificate renewal schedule (cron)
+nginx_ssl_renewal_day: "1,15"
+nginx_ssl_renewal_hour: "3"
+nginx_ssl_renewal_minute: "30"

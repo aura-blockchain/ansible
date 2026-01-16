@@ -1,0 +1,44 @@
+---
+# Install Go for Cosmos SDK chains
+
+- name: Check if Go is installed
+  ansible.builtin.stat:
+    path: "{{ go_install_path }}/bin/go"
+  register: go_installed
+
+- name: Check Go version
+  ansible.builtin.command: "{{ go_install_path }}/bin/go version"
+  register: go_version_check
+  changed_when: false
+  when: go_installed.stat.exists
+
+- name: Download Go
+  ansible.builtin.get_url:
+    url: "https://go.dev/dl/go{{ go_version }}.linux-amd64.tar.gz"
+    dest: "/tmp/go{{ go_version }}.linux-amd64.tar.gz"
+    mode: '0644'
+  when: not go_installed.stat.exists or go_version not in go_version_check.stdout | default('')
+
+- name: Remove existing Go installation
+  ansible.builtin.file:
+    path: "{{ go_install_path }}"
+    state: absent
+  when: not go_installed.stat.exists or go_version not in go_version_check.stdout | default('')
+
+- name: Extract Go
+  ansible.builtin.unarchive:
+    src: "/tmp/go{{ go_version }}.linux-amd64.tar.gz"
+    dest: /usr/local
+    remote_src: yes
+  when: not go_installed.stat.exists or go_version not in go_version_check.stdout | default('')
+
+- name: Add Go to system PATH
+  ansible.builtin.copy:
+    content: |
+      export PATH=$PATH:/usr/local/go/bin
+      export GOPATH=$HOME/go
+      export PATH=$PATH:$GOPATH/bin
+    dest: /etc/profile.d/go.sh
+    owner: root
+    group: root
+    mode: '0644'

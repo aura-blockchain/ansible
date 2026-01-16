@@ -1,0 +1,15 @@
+---
+# Meta information for nginx-configs role
+
+galaxy_info:
+  author: AURA Blockchain Team
+  description: Deploy nginx configuration files for AURA blockchain services
+  license: Apache-2.0
+  min_ansible_version: "2.10"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - focal
+        - jammy
+
+dependencies: []

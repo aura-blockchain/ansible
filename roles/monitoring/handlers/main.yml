@@ -1,0 +1,12 @@
+---
+# Handlers for monitoring role
+# Note: node_exporter handlers are in the node_exporter role
+
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Restart prometheus
+  ansible.builtin.service:
+    name: prometheus
+    state: restarted

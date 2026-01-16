@@ -1,0 +1,75 @@
+---
+# =============================================================================
+# AURA BLOCKCHAIN - SNAPSHOT OPERATIONS
+# =============================================================================
+# Create and manage chain snapshots for fast sync
+#
+# Usage:
+#   Setup cron:     ansible-playbook -i inventory/testnet.yml support_snapshot.yml
+#   Create now:     ansible-playbook -i inventory/testnet.yml support_snapshot.yml -e snapshot_now=true
+#   Single host:    ansible-playbook -i inventory/testnet.yml support_snapshot.yml --limit aura_val1
+# =============================================================================
+
+- name: Snapshot Configuration
+  hosts: all_nodes
+  become: true
+  gather_facts: true
+
+  vars:
+    snapshot_now: false
+
+  pre_tasks:
+    - name: Display snapshot info
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          Snapshot Configuration: {{ inventory_hostname }}
+          ============================================
+          Snapshots enabled: {{ enable_snapshots | default(false) }}
+          Immediate snapshot: {{ snapshot_now }}
+          ============================================
+
+  roles:
+    - role: snapshot
+      tags: [snapshot]
+      when: enable_snapshots | default(false)
+
+  tasks:
+    - name: Create immediate snapshot
+      when:
+        - snapshot_now | bool
+        - enable_snapshots | default(false)
+      block:
+        - name: Stop node service
+          ansible.builtin.service:
+            name: "{{ node_service_name }}"
+            state: stopped
+
+        - name: Create snapshot
+          ansible.builtin.shell: |
+            set -o pipefail
+            cd {{ node_daemon_home }}
+            tar -cvf - data | lz4 > /tmp/{{ chain_id }}-$(date +%Y%m%d-%H%M%S).tar.lz4
+          args:
+            executable: /bin/bash
+          register: snapshot_result
+          changed_when: true
+
+        - name: Start node service
+          ansible.builtin.service:
+            name: "{{ node_service_name }}"
+            state: started
+
+        - name: Display snapshot result
+          ansible.builtin.debug:
+            msg: "Snapshot created: {{ snapshot_result.stdout_lines | last | default('unknown') }}"
+
+  post_tasks:
+    - name: Display snapshot status
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          Snapshot Status: {{ inventory_hostname }}
+          ============================================
+          Cron job: {{ 'configured' if enable_snapshots | default(false) else 'disabled' }}
+          ============================================

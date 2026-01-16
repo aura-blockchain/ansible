@@ -1,0 +1,20 @@
+---
+# AURA Node Role - Handlers
+
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+  become: true
+
+- name: Restart aurad service
+  ansible.builtin.systemd:
+    name: "aurad-mvp-{{ node_name }}"
+    state: restarted
+  become: true
+  when: node_service_state != 'stopped'
+
+- name: Stop aurad service
+  ansible.builtin.systemd:
+    name: "aurad-mvp-{{ node_name }}"
+    state: stopped
+  become: true

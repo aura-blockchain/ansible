@@ -1,0 +1,38 @@
+# Managed by Ansible - DO NOT EDIT MANUALLY
+# AURA upstream definitions for load balancing
+
+# RPC Backend (Tendermint RPC)
+upstream aura_rpc {
+    server 127.0.0.1:{{ nginx_rpc_port | default(26657) }};
+    keepalive 32;
+}
+
+# REST API Backend (Cosmos SDK LCD)
+upstream aura_api {
+    server 127.0.0.1:{{ nginx_rest_port | default(1317) }};
+    keepalive 32;
+}
+
+# gRPC Backend
+upstream aura_grpc {
+    server 127.0.0.1:{{ nginx_grpc_port | default(9090) }};
+    keepalive 32;
+}
+
+# WebSocket Backend (same as RPC for Tendermint)
+upstream aura_ws {
+    server 127.0.0.1:{{ nginx_ws_port | default(26657) }};
+    keepalive 32;
+}
+
+# Explorer Backend
+upstream aura_explorer {
+    server 127.0.0.1:{{ nginx_explorer_port | default(8082) }};
+    keepalive 16;
+}
+
+# Faucet Backend
+upstream aura_faucet {
+    server 127.0.0.1:{{ nginx_faucet_port | default(8081) }};
+    keepalive 8;
+}

@@ -1,0 +1,175 @@
+# Prometheus Configuration for AURA Blockchain Testnet
+# Monitors aura-mvp-1 validators and sentry nodes across two servers
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'aura-mvp-1-monitor'
+    environment: 'testnet'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+# Load alert rules
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          node_name: 'prometheus'
+          node_type: 'monitoring'
+          chain_id: 'aura-mvp-1'
+
+  # Node Exporter - System metrics from all nodes
+  - job_name: 'node_exporter'
+    static_configs:
+      # aura-testnet server (val1, val2, sentry1)
+      - targets: ['10.10.0.1:9100']
+        labels:
+          node_name: 'aura-testnet'
+          node_type: 'validator-host'
+          chain_id: 'aura-mvp-1'
+          server: 'aura-testnet'
+      # services-testnet server (val3, val4, sentry2)
+      - targets: ['10.10.0.4:9100']
+        labels:
+          node_name: 'services-testnet'
+          node_type: 'validator-host'
+          chain_id: 'aura-mvp-1'
+          server: 'services-testnet'
+
+  # Cosmos Exporter - Validator-specific metrics
+  - job_name: 'cosmos_exporter'
+    static_configs:
+      # Validator 1 on aura-testnet
+      - targets: ['10.10.0.1:9300']
+        labels:
+          node_name: 'val1'
+          node_type: 'validator'
+          chain_id: 'aura-mvp-1'
+          server: 'aura-testnet'
+      # Validator 2 on aura-testnet
+      - targets: ['10.10.0.1:9301']
+        labels:
+          node_name: 'val2'
+          node_type: 'validator'
+          chain_id: 'aura-mvp-1'
+          server: 'aura-testnet'
+      # Validator 3 on services-testnet
+      - targets: ['10.10.0.4:9300']
+        labels:
+          node_name: 'val3'
+          node_type: 'validator'
+          chain_id: 'aura-mvp-1'
+          server: 'services-testnet'
+      # Validator 4 on services-testnet
+      - targets: ['10.10.0.4:9301']
+        labels:
+          node_name: 'val4'
+          node_type: 'validator'
+          chain_id: 'aura-mvp-1'
+          server: 'services-testnet'
+
+  # Tendermint/CometBFT metrics from RPC endpoints
+  - job_name: 'tendermint'
+    metrics_path: /metrics
+    static_configs:
+      # Validator 1 - RPC 26657
+      - targets: ['10.10.0.1:26657']
+        labels:
+          node_name: 'val1'
+          node_type: 'validator'
+          chain_id: 'aura-mvp-1'
+          server: 'aura-testnet'
+      # Validator 2 - RPC 26757
+      - targets: ['10.10.0.1:26757']
+        labels:
+          node_name: 'val2'
+          node_type: 'validator'
+          chain_id: 'aura-mvp-1'
+          server: 'aura-testnet'
+      # Sentry 1 - RPC 26680
+      - targets: ['10.10.0.1:26680']
+        labels:
+          node_name: 'sentry1'
+          node_type: 'sentry'
+          chain_id: 'aura-mvp-1'
+          server: 'aura-testnet'
+      # Validator 3 - RPC 26657
+      - targets: ['10.10.0.4:26657']
+        labels:
+          node_name: 'val3'
+          node_type: 'validator'
+          chain_id: 'aura-mvp-1'
+          server: 'services-testnet'
+      # Validator 4 - RPC 26757
+      - targets: ['10.10.0.4:26757']
+        labels:
+          node_name: 'val4'
+          node_type: 'validator'
+          chain_id: 'aura-mvp-1'
+          server: 'services-testnet'
+      # Sentry 2 - RPC 26680
+      - targets: ['10.10.0.4:26680']
+        labels:
+          node_name: 'sentry2'
+          node_type: 'sentry'
+          chain_id: 'aura-mvp-1'
+          server: 'services-testnet'
+
+  # Prometheus metrics from Tendermint (alternative port if enabled)
+  - job_name: 'tendermint_prometheus'
+    metrics_path: /metrics
+    static_configs:
+      # Val1 Prometheus port (if enabled in config.toml)
+      - targets: ['10.10.0.1:26660']
+        labels:
+          node_name: 'val1'
+          node_type: 'validator'
+          chain_id: 'aura-mvp-1'
+          server: 'aura-testnet'
+      # Val2 Prometheus port
+      - targets: ['10.10.0.1:26760']
+        labels:
+          node_name: 'val2'
+          node_type: 'validator'
+          chain_id: 'aura-mvp-1'
+          server: 'aura-testnet'
+      # Sentry1 Prometheus port
+      - targets: ['10.10.0.1:26690']
+        labels:
+          node_name: 'sentry1'
+          node_type: 'sentry'
+          chain_id: 'aura-mvp-1'
+          server: 'aura-testnet'
+      # Val3 Prometheus port
+      - targets: ['10.10.0.4:26660']
+        labels:
+          node_name: 'val3'
+          node_type: 'validator'
+          chain_id: 'aura-mvp-1'
+          server: 'services-testnet'
+      # Val4 Prometheus port
+      - targets: ['10.10.0.4:26760']
+        labels:
+          node_name: 'val4'
+          node_type: 'validator'
+          chain_id: 'aura-mvp-1'
+          server: 'services-testnet'
+      # Sentry2 Prometheus port
+      - targets: ['10.10.0.4:26690']
+        labels:
+          node_name: 'sentry2'
+          node_type: 'sentry'
+          chain_id: 'aura-mvp-1'
+          server: 'services-testnet'

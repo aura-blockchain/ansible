@@ -1,0 +1,125 @@
+---
+# Security role - Unattended upgrades, logrotate, and additional hardening
+
+# Install security packages
+- name: Install security packages
+  ansible.builtin.apt:
+    name:
+      - unattended-upgrades
+      - apt-listchanges
+      - logrotate
+    state: present
+    update_cache: true
+  become: true
+
+# Configure unattended upgrades
+- name: Configure unattended-upgrades
+  ansible.builtin.template:
+    src: 50unattended-upgrades.j2
+    dest: /etc/apt/apt.conf.d/50unattended-upgrades
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+
+- name: Enable automatic updates
+  ansible.builtin.template:
+    src: 20auto-upgrades.j2
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+
+# Configure logrotate for AURA
+- name: Configure logrotate for AURA blockchain
+  ansible.builtin.template:
+    src: aura-logrotate.j2
+    dest: /etc/logrotate.d/aura
+    owner: root
+    group: root
+    mode: '0644'
+  become: true
+
+# Additional hardening
+- name: Disable unused network protocols
+  ansible.builtin.copy:
+    dest: /etc/modprobe.d/blacklist-uncommon-network.conf
+    content: |
+      # Disable uncommon network protocols
+      install dccp /bin/true
+      install sctp /bin/true
+      install rds /bin/true
+      install tipc /bin/true
+    mode: '0644'
+  become: true
+  when: security_disable_uncommon_protocols | default(true)
+
+- name: Configure secure permissions for sensitive files
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    mode: "{{ item.mode }}"
+  become: true
+  loop:
+    - { path: '/etc/passwd', mode: '0644' }
+    - { path: '/etc/shadow', mode: '0640' }
+    - { path: '/etc/group', mode: '0644' }
+    - { path: '/etc/gshadow', mode: '0640' }
+  failed_when: false
+
+# Restrict cron access
+- name: Restrict cron access
+  ansible.builtin.file:
+    path: /etc/cron.allow
+    state: touch
+    owner: root
+    group: root
+    mode: '0600'
+  become: true
+  when: security_restrict_cron | default(false)
+
+- name: Add users to cron.allow
+  ansible.builtin.lineinfile:
+    path: /etc/cron.allow
+    line: "{{ item }}"
+    state: present
+  become: true
+  loop: "{{ security_cron_allowed_users | default(['root']) }}"
+  when: security_restrict_cron | default(false)
+
+# Enable process accounting (optional)
+- name: Install process accounting
+  ansible.builtin.apt:
+    name: acct
+    state: present
+  become: true
+  when: security_enable_process_accounting | default(false)
+
+- name: Enable process accounting service
+  ansible.builtin.service:
+    name: acct
+    enabled: true
+    state: started
+  become: true
+  when: security_enable_process_accounting | default(false)
+
+# Configure core dump settings
+- name: Disable core dumps
+  ansible.builtin.copy:
+    dest: /etc/security/limits.d/99-coredumps.conf
+    content: |
+      # Disable core dumps for security
+      *               hard    core            0
+    mode: '0644'
+  become: true
+  when: security_disable_core_dumps | default(true)
+
+- name: Configure sysctl for core dumps
+  ansible.posix.sysctl:
+    name: fs.suid_dumpable
+    value: '0'
+    sysctl_set: true
+    state: present
+    reload: true
+  become: true
+  when: security_disable_core_dumps | default(true)

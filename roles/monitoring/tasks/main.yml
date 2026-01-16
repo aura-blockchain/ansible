@@ -1,0 +1,33 @@
+---
+# Monitoring stack deployment (Prometheus server)
+# Note: node_exporter is installed via role dependency (see meta/main.yml)
+
+- name: Create prometheus user
+  ansible.builtin.user:
+    name: prometheus
+    shell: /usr/sbin/nologin
+    create_home: false
+    system: true
+
+- name: Create monitoring directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: prometheus
+    group: prometheus
+    mode: '0755'
+  loop:
+    - /etc/prometheus
+    - /var/lib/prometheus
+
+- name: Install Prometheus (if primary)
+  ansible.builtin.include_tasks: prometheus.yml
+  when: monitoring_install_prometheus | default(false)
+
+- name: Allow Prometheus port through UFW (if primary)
+  community.general.ufw:
+    rule: allow
+    port: "{{ monitoring_prometheus_port }}"
+    proto: tcp
+    from_ip: 10.10.0.0/24
+  when: monitoring_install_prometheus | default(false)

@@ -1,0 +1,50 @@
+---
+# =============================================================================
+# AURA BLOCKCHAIN - SERVER SECURITY HARDENING
+# =============================================================================
+# Run this BEFORE main.yml on fresh servers
+#
+# Usage:
+#   All hosts:    ansible-playbook -i inventory/testnet.yml setup.yml
+#   Single host:  ansible-playbook -i inventory/testnet.yml setup.yml --limit aura_val1
+# =============================================================================
+
+- name: Server Security Setup
+  hosts: all
+  become: true
+  gather_facts: true
+
+  pre_tasks:
+    - name: Display setup info
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          Server Security Setup: {{ inventory_hostname }}
+          ============================================
+
+  roles:
+    # Base packages, sysctl, user setup
+    - role: common
+      tags: [common, base]
+
+    # WireGuard VPN for secure inter-node communication
+    - role: wireguard
+      tags: [wireguard, vpn]
+      when: wireguard_enabled | default(true)
+
+    # Security hardening (unattended upgrades, logrotate, etc)
+    - role: security
+      tags: [security, hardening]
+
+  post_tasks:
+    - name: Display security status
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          Security Setup Complete: {{ inventory_hostname }}
+          ============================================
+          - Base packages: installed
+          - WireGuard: {{ 'configured' if wireguard_enabled | default(true) else 'skipped' }}
+          - Unattended upgrades: enabled
+          - Logrotate: configured
+          ============================================

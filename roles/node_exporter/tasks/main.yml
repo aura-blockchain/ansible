@@ -1,0 +1,96 @@
+---
+# Node Exporter role - Prometheus metrics for system monitoring
+
+- name: Create node_exporter user
+  ansible.builtin.user:
+    name: node_exporter
+    shell: /usr/sbin/nologin
+    system: true
+    create_home: false
+  become: true
+
+- name: Check if node_exporter is installed
+  ansible.builtin.stat:
+    path: /usr/local/bin/node_exporter
+  register: node_exporter_binary_stat
+
+- name: Get installed node_exporter version
+  ansible.builtin.command: /usr/local/bin/node_exporter --version
+  register: node_exporter_version_output
+  when: node_exporter_binary_stat.stat.exists
+  changed_when: false
+  failed_when: false
+
+- name: Set node_exporter needs install flag
+  ansible.builtin.set_fact:
+    node_exporter_needs_install: >-
+      {{ not node_exporter_binary_stat.stat.exists or
+         (node_exporter_version_output.stdout is defined and
+          node_exporter_version not in node_exporter_version_output.stdout) }}
+
+- name: Download node_exporter
+  ansible.builtin.get_url:
+    url: >-
+      https://github.com/prometheus/node_exporter/releases/download/
+      v{{ node_exporter_version }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz
+    dest: "/tmp/node_exporter-{{ node_exporter_version }}.tar.gz"
+    mode: '0644'
+  when: node_exporter_needs_install
+
+- name: Extract node_exporter
+  ansible.builtin.unarchive:
+    src: "/tmp/node_exporter-{{ node_exporter_version }}.tar.gz"
+    dest: /tmp
+    remote_src: true
+  when: node_exporter_needs_install
+
+- name: Install node_exporter binary
+  ansible.builtin.copy:
+    src: "/tmp/node_exporter-{{ node_exporter_version }}.linux-amd64/node_exporter"
+    dest: /usr/local/bin/node_exporter
+    mode: '0755'
+    owner: root
+    group: root
+    remote_src: true
+  become: true
+  when: node_exporter_needs_install
+  notify:
+    - Node exporter reload systemd
+    - Node exporter restart service
+
+- name: Create node_exporter systemd service
+  ansible.builtin.template:
+    src: node_exporter.service.j2
+    dest: /etc/systemd/system/node_exporter.service
+    mode: '0644'
+  become: true
+  notify:
+    - Node exporter reload systemd
+    - Node exporter restart service
+
+- name: Allow node_exporter port through UFW (localhost only)
+  community.general.ufw:
+    rule: allow
+    port: '{{ node_exporter_port }}'
+    proto: tcp
+    from_ip: '{{ item }}'
+    comment: 'Node Exporter - {{ item }}'
+  become: true
+  loop:
+    - 127.0.0.1
+    - '{{ node_exporter_vpn_network | default("10.10.0.0/24") }}'
+
+- name: Enable and start node_exporter
+  ansible.builtin.service:
+    name: node_exporter
+    enabled: true
+    state: started
+  become: true
+
+- name: Clean up downloaded files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "/tmp/node_exporter-{{ node_exporter_version }}.tar.gz"
+    - "/tmp/node_exporter-{{ node_exporter_version }}.linux-amd64"

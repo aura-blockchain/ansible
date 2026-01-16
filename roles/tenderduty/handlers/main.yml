@@ -1,0 +1,13 @@
+---
+# Handlers for tenderduty role
+
+- name: Tenderduty reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+  become: true
+
+- name: Tenderduty restart service
+  ansible.builtin.service:
+    name: aura-tenderduty
+    state: restarted
+  become: true

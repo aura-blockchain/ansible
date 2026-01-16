@@ -1,0 +1,86 @@
+# Tenderduty configuration for AURA blockchain
+# https://github.com/blockpane/tenderduty
+
+enable_dashboard: true
+listen_port: {{ tenderduty_port }}
+hide_logs: false
+prometheus_enabled: {{ tenderduty_prometheus_enabled | lower }}
+prometheus_listen_port: {{ tenderduty_prometheus_port }}
+
+# Alert settings
+alert_if_no_servers: {{ tenderduty_alert_if_no_servers | lower }}
+
+{% if tenderduty_discord_enabled and tenderduty_discord_webhook %}
+# Discord alerts
+discord:
+  enabled: true
+  webhook: "{{ tenderduty_discord_webhook }}"
+{% else %}
+discord:
+  enabled: false
+  webhook: ""
+{% endif %}
+
+{% if tenderduty_telegram_enabled and tenderduty_telegram_token %}
+# Telegram alerts
+telegram:
+  enabled: true
+  api_key: "{{ tenderduty_telegram_token }}"
+  channel: "{{ tenderduty_telegram_chat_id }}"
+{% else %}
+telegram:
+  enabled: false
+  api_key: ""
+  channel: ""
+{% endif %}
+
+{% if tenderduty_pagerduty_enabled and tenderduty_pagerduty_key %}
+# Pagerduty alerts
+pagerduty:
+  enabled: true
+  api_key: "{{ tenderduty_pagerduty_key }}"
+{% else %}
+pagerduty:
+  enabled: false
+  api_key: ""
+{% endif %}
+
+# Chain configurations
+chains:
+  "{{ tenderduty_chain_name }}":
+    chain_id: "{{ tenderduty_chain_id }}"
+    valoper_address: "{{ tenderduty_valoper_address }}"
+    public_fallback: false
+
+    alerts:
+      # Stalled chain alert - triggers if no new blocks in X seconds
+      stalled_enabled: true
+      stalled_minutes: 10
+
+      # Consecutive missed blocks alert
+      consecutive_enabled: true
+      consecutive_missed: 5
+      consecutive_priority: critical
+
+      # Percentage missed in window
+      percentage_enabled: true
+      percentage_missed: 10
+      percentage_priority: warning
+
+      # Alert if not in active validator set
+      alert_if_inactive: true
+      alert_if_no_servers: true
+
+      # Jailing/slashing alerts
+      pagerduty_priority: critical
+
+    nodes:
+      - url: "{{ tenderduty_tendermint_rpc }}"
+        alert_if_down: true
+
+{% if tenderduty_additional_nodes is defined %}
+{% for node in tenderduty_additional_nodes %}
+      - url: "{{ node.url }}"
+        alert_if_down: {{ node.alert_if_down | default(true) | lower }}
+{% endfor %}
+{% endif %}

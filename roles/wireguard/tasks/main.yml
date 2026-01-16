@@ -1,0 +1,78 @@
+---
+# WireGuard role - Install and configure WireGuard VPN
+
+- name: Install WireGuard
+  ansible.builtin.apt:
+    name:
+      - wireguard
+      - wireguard-tools
+    state: present
+    update_cache: true
+  become: true
+
+- name: Allow WireGuard port through UFW
+  community.general.ufw:
+    rule: allow
+    port: '{{ wireguard_port }}'
+    proto: udp
+    comment: 'WireGuard VPN'
+  become: true
+
+- name: Enable IP forwarding for WireGuard
+  ansible.posix.sysctl:
+    name: "{{ item }}"
+    value: '1'
+    sysctl_set: true
+    state: present
+    reload: true
+  become: true
+  loop:
+    - net.ipv4.ip_forward
+    - net.ipv6.conf.all.forwarding
+
+- name: Create WireGuard config directory
+  ansible.builtin.file:
+    path: /etc/wireguard
+    state: directory
+    mode: '0700'
+    owner: root
+    group: root
+  become: true
+
+- name: Check if WireGuard private key exists
+  ansible.builtin.stat:
+    path: /etc/wireguard/privatekey
+  register: wireguard_privatekey_exists
+  become: true
+
+- name: Generate WireGuard private key
+  ansible.builtin.shell: wg genkey > /etc/wireguard/privatekey
+  args:
+    creates: /etc/wireguard/privatekey
+  become: true
+  when: not wireguard_privatekey_exists.stat.exists
+
+- name: Set permissions on private key
+  ansible.builtin.file:
+    path: /etc/wireguard/privatekey
+    mode: '0600'
+    owner: root
+    group: root
+  become: true
+
+- name: Generate WireGuard public key
+  ansible.builtin.shell: |
+    set -o pipefail
+    cat /etc/wireguard/privatekey | wg pubkey > /etc/wireguard/publickey
+  args:
+    creates: /etc/wireguard/publickey
+    executable: /bin/bash
+  become: true
+
+- name: Set permissions on public key
+  ansible.builtin.file:
+    path: /etc/wireguard/publickey
+    mode: '0644'
+    owner: root
+    group: root
+  become: true

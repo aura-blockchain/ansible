@@ -1,0 +1,191 @@
+---
+# =============================================================================
+# AURA BLOCKCHAIN - RESTORE VALIDATOR KEYS
+# =============================================================================
+# Restore validator keys from backup archive
+#
+# Usage:
+#   ansible-playbook -i inventory/testnet.yml support_restore_keys.yml --limit aura_val1 \
+#     -e backup_archive=/path/to/backup.tar.gz
+#
+#   With local backup file:
+#   ansible-playbook -i inventory/testnet.yml support_restore_keys.yml --limit aura_val1 \
+#     -e backup_archive=/local/path/backup.tar.gz -e backup_is_local=true
+# =============================================================================
+
+- name: Restore Validator Keys
+  hosts: all_nodes
+  become: true
+  gather_facts: true
+
+  vars:
+    backup_archive: ""
+    backup_is_local: false
+    restore_validator_state: true
+    confirm_restore: false
+
+  pre_tasks:
+    - name: Validate backup archive provided
+      ansible.builtin.fail:
+        msg: "backup_archive is required. Use -e backup_archive=/path/to/backup.tar.gz"
+      when: backup_archive | length == 0
+
+    - name: Display restore warning
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          KEY RESTORE: {{ inventory_hostname }}
+          ============================================
+          WARNING: This will OVERWRITE existing keys!
+          ============================================
+          Node: {{ node_name }}
+          Home: {{ node_daemon_home }}
+          Backup: {{ backup_archive }}
+          Local file: {{ backup_is_local }}
+          Restore validator state: {{ restore_validator_state }}
+          ============================================
+
+    - name: Require explicit confirmation
+      ansible.builtin.fail:
+        msg: "Set -e confirm_restore=true to proceed with key restoration"
+      when: not confirm_restore | bool
+
+  tasks:
+    - name: Stop node service
+      ansible.builtin.service:
+        name: "{{ node_service_name }}"
+        state: stopped
+      failed_when: false
+
+    - name: Create temporary restore directory
+      ansible.builtin.file:
+        path: /tmp/key-restore
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Copy backup from local machine
+      ansible.builtin.copy:
+        src: "{{ backup_archive }}"
+        dest: /tmp/key-restore/backup.tar.gz
+        owner: root
+        group: root
+        mode: '0600'
+      when: backup_is_local | bool
+
+    - name: Copy backup from remote path
+      ansible.builtin.copy:
+        src: "{{ backup_archive }}"
+        dest: /tmp/key-restore/backup.tar.gz
+        remote_src: true
+        owner: root
+        group: root
+        mode: '0600'
+      when: not backup_is_local | bool
+
+    - name: Extract backup archive
+      ansible.builtin.unarchive:
+        src: /tmp/key-restore/backup.tar.gz
+        dest: /tmp/key-restore/
+        remote_src: true
+
+    - name: Find extracted directory
+      ansible.builtin.find:
+        paths: /tmp/key-restore/
+        file_type: directory
+        recurse: false
+      register: extracted_dirs
+
+    - name: Set extracted path
+      ansible.builtin.set_fact:
+        extract_path: "{{ extracted_dirs.files[0].path if extracted_dirs.files | length > 0 else '/tmp/key-restore' }}"
+
+    - name: Check for priv_validator_key.json in backup
+      ansible.builtin.stat:
+        path: "{{ extract_path }}/priv_validator_key.json"
+      register: backup_priv_key
+
+    - name: Check for node_key.json in backup
+      ansible.builtin.stat:
+        path: "{{ extract_path }}/node_key.json"
+      register: backup_node_key
+
+    - name: Check for priv_validator_state.json in backup
+      ansible.builtin.stat:
+        path: "{{ extract_path }}/priv_validator_state.json"
+      register: backup_val_state
+
+    - name: Backup existing keys before overwrite
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "{{ item }}.pre-restore-{{ ansible_date_time.epoch }}"
+        remote_src: true
+        mode: '0600'
+      loop:
+        - "{{ node_daemon_home }}/config/priv_validator_key.json"
+        - "{{ node_daemon_home }}/config/node_key.json"
+      failed_when: false
+
+    - name: Restore priv_validator_key.json
+      ansible.builtin.copy:
+        src: "{{ extract_path }}/priv_validator_key.json"
+        dest: "{{ node_daemon_home }}/config/priv_validator_key.json"
+        remote_src: true
+        owner: "{{ node_daemon_user }}"
+        group: "{{ node_daemon_group }}"
+        mode: '0600'
+      when: backup_priv_key.stat.exists
+
+    - name: Restore node_key.json
+      ansible.builtin.copy:
+        src: "{{ extract_path }}/node_key.json"
+        dest: "{{ node_daemon_home }}/config/node_key.json"
+        remote_src: true
+        owner: "{{ node_daemon_user }}"
+        group: "{{ node_daemon_group }}"
+        mode: '0600'
+      when: backup_node_key.stat.exists
+
+    - name: Restore priv_validator_state.json
+      ansible.builtin.copy:
+        src: "{{ extract_path }}/priv_validator_state.json"
+        dest: "{{ node_daemon_home }}/data/priv_validator_state.json"
+        remote_src: true
+        owner: "{{ node_daemon_user }}"
+        group: "{{ node_daemon_group }}"
+        mode: '0600'
+      when:
+        - backup_val_state.stat.exists
+        - restore_validator_state | bool
+
+    - name: Clean up temporary restore directory
+      ansible.builtin.file:
+        path: /tmp/key-restore
+        state: absent
+
+    - name: Verify restored priv_validator_key.json
+      ansible.builtin.command: cat {{ node_daemon_home }}/config/priv_validator_key.json
+      register: restored_key
+      changed_when: false
+
+    - name: Extract validator address from restored key
+      ansible.builtin.set_fact:
+        validator_address: "{{ (restored_key.stdout | from_json).address }}"
+
+    - name: Display restore result
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          Keys Restored: {{ inventory_hostname }}
+          ============================================
+          Validator Address: {{ validator_address }}
+          ============================================
+          Restored files:
+          {% if backup_priv_key.stat.exists %}- priv_validator_key.json{% endif %}
+          {% if backup_node_key.stat.exists %}- node_key.json{% endif %}
+          {% if backup_val_state.stat.exists and restore_validator_state %}- priv_validator_state.json{% endif %}
+          ============================================
+          Node service is STOPPED. Start manually after verification:
+          sudo systemctl start {{ node_service_name }}
+          ============================================

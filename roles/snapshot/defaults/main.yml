@@ -1,0 +1,28 @@
+---
+# Default variables for snapshot role
+
+# Disable snapshots by default
+snapshot_enabled: false
+
+# Snapshot storage
+snapshot_dir: /var/backups/aura
+snapshot_retention_days: 7
+
+# Cron schedule (default: daily at midnight UTC)
+snapshot_cron_minute: '0'
+snapshot_cron_hour: '0'
+
+# AURA node settings
+snapshot_aura_home: '~/.aura-mvp-val1'
+snapshot_aura_service: 'aurad-mvp-val1'
+snapshot_chain_id: 'aura-mvp-1'
+
+# R2 upload settings (optional)
+snapshot_r2_upload_enabled: false
+snapshot_r2_bucket: 'aura-testnet-artifacts'
+snapshot_r2_endpoint: ''
+snapshot_r2_access_key_id: ''
+snapshot_r2_secret_access_key: ''
+
+# Compression
+snapshot_compression: 'lz4'  # Options: lz4, gzip, zstd

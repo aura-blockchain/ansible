@@ -1,0 +1,90 @@
+---
+# =============================================================================
+# AURA BLOCKCHAIN - PRIMARY NODE SETUP
+# =============================================================================
+# Chain: AURA (Cosmos SDK)
+# Chain ID: aura-mvp-1
+#
+# Usage:
+#   Full deployment:  ansible-playbook -i inventory/testnet.yml main.yml
+#   Single host:      ansible-playbook -i inventory/testnet.yml main.yml --limit aura_val1
+#   Validators only:  ansible-playbook -i inventory/testnet.yml main.yml --limit validators
+#   Dry run:          ansible-playbook -i inventory/testnet.yml main.yml --check
+# =============================================================================
+
+- name: AURA Node Deployment
+  hosts: all_nodes
+  become: true
+  gather_facts: true
+
+  pre_tasks:
+    - name: Display deployment info
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          AURA Node Deployment
+          ============================================
+          Target: {{ inventory_hostname }}
+          Type: {{ node_type | default('unknown') }}
+          Name: {{ node_name | default('unknown') }}
+          Chain ID: {{ chain_id }}
+          ============================================
+
+    - name: Verify connectivity
+      ansible.builtin.ping:
+
+  roles:
+    # Core node setup (Go, Cosmovisor, binary, config)
+    - role: node
+      tags: [node]
+
+  post_tasks:
+    - name: Verify node service is running
+      ansible.builtin.service:
+        name: "{{ node_service_name }}"
+        state: started
+      register: node_service_status
+      failed_when: false
+
+    - name: Check node RPC endpoint
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ node_rpc_port }}/status"
+        method: GET
+        return_content: true
+      register: node_status
+      failed_when: false
+      changed_when: false
+
+    - name: Display node status
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          Node Status: {{ inventory_hostname }}
+          ============================================
+          Service: {{ 'running' if node_service_status.status is defined and node_service_status.status.ActiveState == 'active' else 'not running' }}
+          RPC: {{ 'responding' if node_status.status == 200 else 'not responding' }}
+          {% if node_status.json is defined %}
+          Height: {{ node_status.json.result.sync_info.latest_block_height | default('N/A') }}
+          Syncing: {{ node_status.json.result.sync_info.catching_up | default('N/A') }}
+          {% endif %}
+          ============================================
+
+- name: Sentry Node Configuration
+  hosts: sentries
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Allow P2P port through UFW (public)
+      community.general.ufw:
+        rule: allow
+        port: "{{ node_p2p_port }}"
+        proto: tcp
+        comment: "AURA P2P - {{ node_name }}"
+
+    - name: Display sentry info
+      ansible.builtin.debug:
+        msg: |
+          Sentry {{ node_name }} ready.
+          - P2P: 0.0.0.0:{{ node_p2p_port }} (public)
+          - RPC: 127.0.0.1:{{ node_rpc_port }} (local)

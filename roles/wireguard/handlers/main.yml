@@ -1,0 +1,15 @@
+---
+# Handlers for wireguard role
+
+- name: Wireguard restart service
+  ansible.builtin.service:
+    name: "wg-quick@{{ wireguard_interface }}"
+    state: restarted
+  become: true
+
+- name: Wireguard reload config
+  ansible.builtin.command: wg syncconf {{ wireguard_interface }} <(wg-quick strip {{ wireguard_interface }})
+  args:
+    executable: /bin/bash
+  become: true
+  changed_when: false

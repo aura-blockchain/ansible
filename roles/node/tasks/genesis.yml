@@ -1,0 +1,31 @@
+---
+# Genesis Download Tasks
+
+- name: Check if genesis file exists
+  ansible.builtin.stat:
+    path: "{{ node_daemon_home }}/config/genesis.json"
+  register: node_genesis_stat
+
+- name: Download genesis file
+  ansible.builtin.get_url:
+    url: "{{ node_genesis_url }}"
+    dest: "{{ node_daemon_home }}/config/genesis.json"
+    owner: "{{ node_daemon_user }}"
+    group: "{{ node_daemon_user }}"
+    mode: "0640"
+  become: true
+  when: not node_genesis_stat.stat.exists
+
+- name: Verify genesis file
+  ansible.builtin.command: >
+    {{ node_daemon_home }}/cosmovisor/genesis/bin/{{ node_daemon_name }} genesis validate
+    --home {{ node_daemon_home }}
+  become: true
+  become_user: "{{ node_daemon_user }}"
+  register: node_genesis_validate
+  changed_when: false
+  failed_when: false
+
+- name: Display genesis validation result
+  ansible.builtin.debug:
+    msg: "Genesis validation: {{ 'PASSED' if node_genesis_validate.rc == 0 else 'FAILED - ' + node_genesis_validate.stderr }}"

@@ -1,0 +1,28 @@
+# Managed by Ansible - DO NOT EDIT MANUALLY
+# SSH server configuration with hardening
+
+Port {{ ssh_port }}
+AddressFamily any
+ListenAddress 0.0.0.0
+
+# Authentication
+PermitRootLogin {{ ssh_permit_root }}
+PasswordAuthentication {{ ssh_password_auth }}
+ChallengeResponseAuthentication no
+PubkeyAuthentication yes
+AuthorizedKeysFile .ssh/authorized_keys
+
+# Security
+X11Forwarding no
+PrintMotd no
+AcceptEnv LANG LC_*
+UsePAM yes
+
+# Connection
+ClientAliveInterval 120
+ClientAliveCountMax 3
+MaxAuthTries 3
+MaxSessions 10
+
+# Subsystem
+Subsystem sftp /usr/lib/openssh/sftp-server

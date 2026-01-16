@@ -1,0 +1,156 @@
+---
+# Tenderduty role - Validator monitoring and alerting
+# Builds from source for security and reproducibility
+# Only deployed on validator nodes
+
+- name: Check if this is a validator node
+  ansible.builtin.set_fact:
+    tenderduty_is_validator_node: "{{ 'validator' in group_names or 'val' in inventory_hostname }}"
+
+- name: Create tenderduty user
+  ansible.builtin.user:
+    name: tenderduty
+    shell: /usr/sbin/nologin
+    system: true
+    create_home: true
+    home: "{{ tenderduty_install_dir }}"
+  become: true
+  when: tenderduty_is_validator_node | bool
+
+- name: Create tenderduty directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: tenderduty
+    group: tenderduty
+    mode: '0755'
+  become: true
+  loop:
+    - "{{ tenderduty_install_dir }}"
+    - "{{ tenderduty_install_dir }}/bin"
+    - "{{ tenderduty_install_dir }}/config"
+  when: tenderduty_is_validator_node | bool
+
+- name: Check if tenderduty binary exists
+  ansible.builtin.stat:
+    path: "{{ tenderduty_install_dir }}/bin/tenderduty"
+  register: tenderduty_binary_stat
+  when: tenderduty_is_validator_node | bool
+
+- name: Get installed tenderduty version
+  ansible.builtin.command: "{{ tenderduty_install_dir }}/bin/tenderduty version"
+  register: tenderduty_installed_version
+  changed_when: false
+  failed_when: false
+  when:
+    - tenderduty_is_validator_node | bool
+    - tenderduty_binary_stat.stat.exists | default(false)
+
+- name: Set tenderduty needs build flag
+  ansible.builtin.set_fact:
+    tenderduty_needs_build: >-
+      {{ not tenderduty_binary_stat.stat.exists | default(true) or
+         (tenderduty_installed_version.stdout is defined and
+          tenderduty_version not in tenderduty_installed_version.stdout) }}
+  when: tenderduty_is_validator_node | bool
+
+# Build from source
+- name: Remove old build directory
+  ansible.builtin.file:
+    path: "{{ tenderduty_build_dir }}"
+    state: absent
+  become: true
+  when:
+    - tenderduty_is_validator_node | bool
+    - tenderduty_needs_build | default(true)
+
+- name: Clone tenderduty repository
+  ansible.builtin.git:
+    repo: "{{ tenderduty_repo }}"
+    dest: "{{ tenderduty_build_dir }}"
+    version: "{{ tenderduty_version }}"
+    depth: 1
+  become: true
+  when:
+    - tenderduty_is_validator_node | bool
+    - tenderduty_needs_build | default(true)
+
+- name: Build tenderduty from source
+  ansible.builtin.shell: |
+    set -o pipefail
+    export PATH=$PATH:/usr/local/go/bin
+    export GOPATH=/tmp/go
+    cd {{ tenderduty_build_dir }}
+    go build -ldflags="-s -w -X main.version={{ tenderduty_version }}" -o tenderduty .
+  args:
+    executable: /bin/bash
+    creates: "{{ tenderduty_build_dir }}/tenderduty"
+  become: true
+  when:
+    - tenderduty_is_validator_node | bool
+    - tenderduty_needs_build | default(true)
+
+- name: Install tenderduty binary
+  ansible.builtin.copy:
+    src: "{{ tenderduty_build_dir }}/tenderduty"
+    dest: "{{ tenderduty_install_dir }}/bin/tenderduty"
+    mode: '0755'
+    owner: tenderduty
+    group: tenderduty
+    remote_src: true
+  become: true
+  when:
+    - tenderduty_is_validator_node | bool
+    - tenderduty_needs_build | default(true)
+  notify:
+    - Tenderduty reload systemd
+    - Tenderduty restart service
+
+- name: Clean up build directory
+  ansible.builtin.file:
+    path: "{{ tenderduty_build_dir }}"
+    state: absent
+  become: true
+  when:
+    - tenderduty_is_validator_node | bool
+    - tenderduty_needs_build | default(true)
+
+- name: Deploy tenderduty configuration for AURA
+  ansible.builtin.template:
+    src: aura-config.yml.j2
+    dest: "{{ tenderduty_install_dir }}/config/config.yml"
+    owner: tenderduty
+    group: tenderduty
+    mode: '0644'
+  become: true
+  when: tenderduty_is_validator_node | bool
+  notify: Tenderduty restart service
+
+- name: Create tenderduty systemd service
+  ansible.builtin.template:
+    src: aura-tenderduty.service.j2
+    dest: /etc/systemd/system/aura-tenderduty.service
+    mode: '0644'
+  become: true
+  when: tenderduty_is_validator_node | bool
+  notify:
+    - Tenderduty reload systemd
+    - Tenderduty restart service
+
+- name: Allow tenderduty port through UFW (VPN only)
+  community.general.ufw:
+    rule: allow
+    port: '{{ tenderduty_port }}'
+    proto: tcp
+    from_ip: '{{ tenderduty_vpn_network | default("10.10.0.0/24") }}'
+    comment: 'AURA Tenderduty Dashboard'
+  become: true
+  when: tenderduty_is_validator_node | bool
+
+- name: Enable and start tenderduty
+  ansible.builtin.service:
+    name: aura-tenderduty
+    enabled: true
+    state: started
+  become: true
+  when: tenderduty_is_validator_node | bool

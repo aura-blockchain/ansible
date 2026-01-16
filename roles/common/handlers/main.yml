@@ -1,0 +1,19 @@
+---
+# Handlers for common role
+
+- name: Restart SSH
+  ansible.builtin.service:
+    name: ssh
+    state: restarted
+  become: true
+
+- name: Restart Fail2ban
+  ansible.builtin.service:
+    name: fail2ban
+    state: restarted
+  become: true
+
+- name: Reload Sysctl
+  ansible.builtin.command: sysctl --system
+  become: true
+  changed_when: false

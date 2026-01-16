@@ -1,0 +1,36 @@
+---
+# Default variables for security role
+
+# Unattended upgrades settings
+security_unattended_upgrades_enabled: true
+security_unattended_upgrades_mail: ''
+security_unattended_upgrades_mail_only_on_error: true
+security_unattended_upgrades_remove_unused_deps: true
+security_unattended_upgrades_remove_unused_kernel: true
+security_unattended_upgrades_auto_reboot: false
+security_unattended_upgrades_auto_reboot_time: '02:00'
+
+# Automatic updates frequency
+security_auto_upgrades_update_list: 1
+security_auto_upgrades_download: 1
+security_auto_upgrades_install: 1
+security_auto_upgrades_autoclean: 7
+
+# Logrotate settings
+security_logrotate_rotate_count: 7
+security_logrotate_compress: true
+security_logrotate_delaycompress: true
+
+# AURA log settings
+security_aura_log_dir: '/var/log/aura'
+security_aura_service_name: 'aurad-mvp-*'
+
+# Additional hardening
+security_disable_uncommon_protocols: true
+security_disable_core_dumps: true
+security_restrict_cron: false
+security_cron_allowed_users:
+  - root
+  - ubuntu
+
+security_enable_process_accounting: false

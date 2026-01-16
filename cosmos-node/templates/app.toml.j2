@@ -1,0 +1,62 @@
+# Managed by Ansible - DO NOT EDIT MANUALLY
+# Application configuration for {{ chain | upper }}
+
+minimum-gas-prices = "0.0025u{{ chain }}"
+pruning = "{{ pruning }}"
+pruning-keep-recent = "{{ pruning_keep_recent }}"
+pruning-interval = "{{ pruning_interval }}"
+halt-height = 0
+halt-time = 0
+min-retain-blocks = 0
+inter-block-cache = true
+index-events = []
+iavl-cache-size = 781250
+iavl-disable-fastnode = false
+app-db-backend = ""
+
+[telemetry]
+service-name = "{{ daemon_name }}"
+enabled = true
+enable-hostname = false
+enable-hostname-label = false
+enable-service-label = true
+prometheus-retention-time = 60
+global-labels = []
+
+[api]
+enable = true
+swagger = false
+address = "tcp://127.0.0.1:{{ rest_port }}"
+max-open-connections = 1000
+rpc-read-timeout = 10
+rpc-write-timeout = 0
+rpc-max-body-bytes = 1000000
+enabled-unsafe-cors = false
+
+[grpc]
+enable = true
+address = "0.0.0.0:{{ grpc_port }}"
+max-recv-msg-size = "10485760"
+max-send-msg-size = "2147483647"
+
+[grpc-web]
+enable = false
+
+[state-sync]
+snapshot-interval = 1000
+snapshot-keep-recent = 2
+
+[store]
+streamers = []
+
+[streamers]
+[streamers.file]
+keys = ["*", ]
+write_dir = ""
+prefix = ""
+output-metadata = "true"
+stop-node-on-error = "true"
+fsync = "false"
+
+[mempool]
+max-txs = "5000"

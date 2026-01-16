@@ -1,0 +1,55 @@
+---
+# =============================================================================
+# AURA BLOCKCHAIN - MONITORING SETUP
+# =============================================================================
+# Deploys Prometheus exporters and Tenderduty alerting
+#
+# Usage:
+#   All nodes:      ansible-playbook -i inventory/testnet.yml support_monitoring.yml
+#   Validators:     ansible-playbook -i inventory/testnet.yml support_monitoring.yml --limit validators
+#   Single host:    ansible-playbook -i inventory/testnet.yml support_monitoring.yml --limit aura_val1
+# =============================================================================
+
+- name: Monitoring Setup
+  hosts: all_nodes
+  become: true
+  gather_facts: true
+
+  pre_tasks:
+    - name: Display monitoring info
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          Monitoring Setup: {{ inventory_hostname }}
+          ============================================
+          Node Type: {{ node_type }}
+          ============================================
+
+  roles:
+    # System metrics (CPU, memory, disk)
+    - role: node_exporter
+      tags: [node_exporter, metrics]
+
+    # Cosmos-specific metrics (block height, peers, voting power)
+    - role: cosmos_exporter
+      tags: [cosmos_exporter, metrics]
+      when: node_type == 'validator'
+
+    # Validator alerting (missed blocks, downtime)
+    - role: tenderduty
+      tags: [tenderduty, alerts]
+      when: node_type == 'validator'
+
+  post_tasks:
+    - name: Display monitoring endpoints
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          Monitoring Endpoints: {{ inventory_hostname }}
+          ============================================
+          Node Exporter: http://127.0.0.1:{{ node_exporter_port | default(9100) }}/metrics
+          {% if node_type == 'validator' %}
+          Cosmos Exporter: http://127.0.0.1:{{ cosmos_exporter_port | default(9300) }}/metrics
+          Tenderduty: http://127.0.0.1:{{ tenderduty_port | default(8888) }}
+          {% endif %}
+          ============================================

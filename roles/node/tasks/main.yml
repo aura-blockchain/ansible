@@ -1,0 +1,62 @@
+---
+# AURA Node Role - Main Tasks
+
+- name: Include Go installation tasks
+  ansible.builtin.include_tasks: go.yml
+  tags:
+    - go
+    - install
+
+- name: Include Cosmovisor installation tasks
+  ansible.builtin.include_tasks: cosmovisor.yml
+  tags:
+    - cosmovisor
+    - install
+
+- name: Include directory setup tasks
+  ansible.builtin.include_tasks: directories.yml
+  tags:
+    - directories
+    - setup
+
+- name: Include binary installation tasks
+  ansible.builtin.include_tasks: binary.yml
+  tags:
+    - binary
+    - install
+
+- name: Include node initialization tasks
+  ansible.builtin.include_tasks: init.yml
+  tags:
+    - init
+    - setup
+
+- name: Include genesis download tasks
+  ansible.builtin.include_tasks: genesis.yml
+  tags:
+    - genesis
+    - setup
+
+- name: Include peers configuration tasks
+  ansible.builtin.include_tasks: peers.yml
+  tags:
+    - peers
+    - config
+
+- name: Include configuration tasks
+  ansible.builtin.include_tasks: config.yml
+  tags:
+    - config
+
+- name: Include systemd service tasks
+  ansible.builtin.include_tasks: service.yml
+  tags:
+    - service
+    - systemd
+
+- name: Include firewall configuration tasks
+  ansible.builtin.include_tasks: firewall.yml
+  when: node_configure_firewall | bool
+  tags:
+    - firewall
+    - security

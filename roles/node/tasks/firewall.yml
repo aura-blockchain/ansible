@@ -1,0 +1,92 @@
+---
+# Firewall Configuration Tasks
+
+- name: Install UFW
+  ansible.builtin.apt:
+    name: ufw
+    state: present
+    update_cache: true
+  become: true
+
+- name: Allow SSH
+  community.general.ufw:
+    rule: allow
+    port: "22"
+    proto: tcp
+  become: true
+
+- name: Allow P2P port for sentry nodes (public)
+  community.general.ufw:
+    rule: allow
+    port: "{{ node_p2p_port }}"
+    proto: tcp
+  become: true
+  when: node_type == 'sentry'
+
+- name: Allow P2P port for validator nodes (VPN only)
+  community.general.ufw:
+    rule: allow
+    port: "{{ node_p2p_port }}"
+    proto: tcp
+    from_ip: "{{ node_vpn_network }}"
+  become: true
+  when: node_type == 'val'
+
+- name: Allow RPC port for sentry nodes (public)
+  community.general.ufw:
+    rule: allow
+    port: "{{ node_rpc_port }}"
+    proto: tcp
+  become: true
+  when: node_type == 'sentry'
+
+- name: Allow RPC port for validator nodes (VPN only)
+  community.general.ufw:
+    rule: allow
+    port: "{{ node_rpc_port }}"
+    proto: tcp
+    from_ip: "{{ node_vpn_network }}"
+  become: true
+  when: node_type == 'val'
+
+- name: Allow API port (localhost and VPN)
+  community.general.ufw:
+    rule: allow
+    port: "{{ node_api_port }}"
+    proto: tcp
+    from_ip: "{{ item }}"
+  become: true
+  loop:
+    - "127.0.0.1"
+    - "{{ node_vpn_network }}"
+  when: node_api_enabled | bool
+
+- name: Allow gRPC port (localhost and VPN)
+  community.general.ufw:
+    rule: allow
+    port: "{{ node_grpc_port }}"
+    proto: tcp
+    from_ip: "{{ item }}"
+  become: true
+  loop:
+    - "127.0.0.1"
+    - "{{ node_vpn_network }}"
+  when: node_grpc_enabled | bool
+
+- name: Allow Prometheus metrics (localhost and VPN)
+  community.general.ufw:
+    rule: allow
+    port: "26660"
+    proto: tcp
+    from_ip: "{{ item }}"
+  become: true
+  loop:
+    - "127.0.0.1"
+    - "{{ node_vpn_network }}"
+  when: node_prometheus_enabled | bool
+
+- name: Enable UFW
+  community.general.ufw:
+    state: enabled
+    policy: deny
+  become: true

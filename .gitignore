@@ -1,0 +1,47 @@
+# Ansible secrets
+*.vault
+.vault_pass
+vault_password
+secrets/
+
+# Keys (NEVER commit)
+*.pem
+*.key
+*priv_validator_key.json
+*node_key.json
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+*.retry
+.last_*
+/tmp/
+.ansible_cache/
+
+# Ansible collections (installed via requirements)
+collections/
+
+# Editor
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# AI-generated summary/report files (do not commit)
+*_SUMMARY*.md
+*_SUMMARY*.txt
+*_REPORT*.md
+*_REPORT*.txt
+*IMPLEMENTATION*.md
+*IMPLEMENTATION*.txt
+*EXECUTIVE*.md
+*COMPLETE*.md
+*FINDINGS*.md
+*ANALYSIS*.md

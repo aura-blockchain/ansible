@@ -1,0 +1,29 @@
+[Unit]
+Description=AURA Cosmos Exporter - Prometheus metrics for AURA chain
+Documentation=https://github.com/solarlabsteam/cosmos-exporter
+Wants=network-online.target
+After=network-online.target aurad-mvp-{{ node_type | default('val1') }}.service
+
+[Service]
+Type=simple
+User=cosmos_exporter
+Group=cosmos_exporter
+ExecStart=/usr/local/bin/cosmos-exporter \
+    --tendermint-rpc={{ cosmos_exporter_tendermint_rpc }} \
+    --node={{ cosmos_exporter_node }} \
+    --log-denom={{ cosmos_exporter_log_denom }} \
+    --denom={{ cosmos_exporter_denom }} \
+    --denom-coefficient={{ cosmos_exporter_denom_coefficient }} \
+    --bech-prefix={{ cosmos_exporter_bech_prefix }} \
+    --listen-address=:{{ cosmos_exporter_port }}
+
+SyslogIdentifier=aura-cosmos-exporter
+Restart=always
+RestartSec=5
+
+NoNewPrivileges=true
+ProtectHome=true
+ProtectSystem=strict
+
+[Install]
+WantedBy=multi-user.target

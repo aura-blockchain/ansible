@@ -1,0 +1,33 @@
+---
+# Default variables for nginx-configs role
+
+# Enable/disable the role
+nginx_configs_enabled: true
+
+# Backend service ports
+nginx_configs_explorer_backend_port: 8082
+nginx_configs_faucet_backend_port: 8081
+nginx_configs_rpc_port: 26657
+nginx_configs_rest_port: 1317
+nginx_configs_grpc_port: 9090
+
+# SSL configuration
+nginx_configs_ssl_enabled: true
+nginx_configs_ssl_cert_path: "/etc/letsencrypt/live/aurablockchain.org/fullchain.pem"
+nginx_configs_ssl_key_path: "/etc/letsencrypt/live/aurablockchain.org/privkey.pem"
+
+# Domain configuration
+nginx_configs_domain: "aurablockchain.org"
+nginx_configs_explorer_subdomain: "testnet-explorer"
+nginx_configs_faucet_subdomain: "testnet-faucet"
+nginx_configs_rpc_subdomain: "testnet-rpc"
+nginx_configs_api_subdomain: "testnet-api"
+
+# Frontend paths
+nginx_configs_explorer_frontend_path: "/home/{{ ansible_user }}/aura/explorer/frontend"
+
+# Backup existing configs before overwriting
+nginx_configs_backup: true
+
+# Test nginx configuration before reloading
+nginx_configs_validate: true

@@ -1,0 +1,16 @@
+# Managed by Ansible - DO NOT EDIT MANUALLY
+# Fail2ban configuration
+
+[DEFAULT]
+bantime = 1h
+findtime = 10m
+maxretry = 5
+backend = systemd
+
+[sshd]
+enabled = true
+port = {{ ssh_port }}
+filter = sshd
+logpath = /var/log/auth.log
+maxretry = 3
+bantime = 24h

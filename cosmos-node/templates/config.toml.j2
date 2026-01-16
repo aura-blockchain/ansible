@@ -1,0 +1,79 @@
+# Managed by Ansible - DO NOT EDIT MANUALLY
+# CometBFT configuration for {{ chain | upper }}
+
+proxy_app = "tcp://127.0.0.1:26658"
+moniker = "{{ ansible_hostname }}"
+db_dir = "data"
+log_level = "info"
+log_format = "plain"
+genesis_file = "config/genesis.json"
+priv_validator_key_file = "config/priv_validator_key.json"
+priv_validator_state_file = "data/priv_validator_state.json"
+node_key_file = "config/node_key.json"
+
+[rpc]
+laddr = "tcp://127.0.0.1:{{ rpc_port }}"
+cors_allowed_origins = []
+cors_allowed_methods = ["HEAD", "GET", "POST"]
+cors_allowed_headers = ["Origin", "Accept", "Content-Type", "X-Requested-With", "X-Server-Time"]
+unsafe = false
+max_open_connections = 900
+max_subscription_clients = 100
+max_subscriptions_per_client = 5
+timeout_broadcast_tx_commit = "10s"
+
+[p2p]
+laddr = "tcp://0.0.0.0:{{ p2p_port }}"
+external_address = "{{ vpn_ip | default(ansible_default_ipv4.address) }}:{{ p2p_port }}"
+seeds = "{{ seeds }}"
+persistent_peers = "{{ persistent_peers }}"
+upnp = false
+addr_book_strict = false
+max_num_inbound_peers = 100
+max_num_outbound_peers = 50
+unconditional_peer_ids = ""
+flush_throttle_timeout = "100ms"
+max_packet_msg_payload_size = 1024
+send_rate = 5120000
+recv_rate = 5120000
+pex = true
+
+[mempool]
+type = "flood"
+recheck = true
+broadcast = true
+size = 5000
+max_txs_bytes = 1073741824
+cache_size = 10000
+
+[statesync]
+enable = false
+
+[blocksync]
+version = "v0"
+
+[consensus]
+wal_file = "data/cs.wal/wal"
+timeout_propose = "3s"
+timeout_propose_delta = "500ms"
+timeout_prevote = "1s"
+timeout_prevote_delta = "500ms"
+timeout_precommit = "1s"
+timeout_precommit_delta = "500ms"
+timeout_commit = "5s"
+double_sign_check_height = 0
+skip_timeout_commit = false
+create_empty_blocks = true
+create_empty_blocks_interval = "0s"
+
+[storage]
+discard_abci_responses = false
+
+[tx_index]
+indexer = "{{ indexer }}"
+
+[instrumentation]
+prometheus = true
+prometheus_listen_addr = ":26660"
+max_open_connections = 10
+namespace = "cometbft"

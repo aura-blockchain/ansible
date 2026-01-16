@@ -1,0 +1,175 @@
+---
+# AURA Testnet Infrastructure Inventory (aura-mvp-1)
+# Run: ansible-playbook -i inventory/testnet.yml playbooks/<playbook>.yml
+
+all:
+  children:
+    # Validators group - all validator nodes
+    validators:
+      hosts:
+        aura_val1:
+          ansible_host: 10.10.0.1
+          public_ip: 158.69.119.76
+          node_name: val1
+          node_type: validator
+          node_number: 1
+          node_daemon_home: /home/ubuntu/.aura-mvp-val1
+          node_rpc_port: 26657
+          node_p2p_port: 26656
+          node_grpc_port: 19090
+          node_service_name: aurad-mvp-val1
+          node_node_id: e07f0f1d927504521957d2a4e025ff2266097f3c
+          server: aura-testnet
+
+        aura_val2:
+          ansible_host: 10.10.0.1
+          public_ip: 158.69.119.76
+          node_name: val2
+          node_type: validator
+          node_number: 2
+          node_daemon_home: /home/ubuntu/.aura-mvp-val2
+          node_rpc_port: 26757
+          node_p2p_port: 26756
+          node_grpc_port: 19190
+          node_service_name: aurad-mvp-val2
+          node_node_id: efd4c11d67c1c3b7f75b0e5123487a30959c721a
+          server: aura-testnet
+
+        aura_val3:
+          ansible_host: 10.10.0.4
+          public_ip: 139.99.149.160
+          node_name: val3
+          node_type: validator
+          node_number: 3
+          node_daemon_home: /home/ubuntu/.aura-mvp-val3
+          node_rpc_port: 26657
+          node_p2p_port: 26656
+          node_grpc_port: 19190
+          node_service_name: aurad-mvp-val3
+          node_node_id: e760686c2f86456b8d1b666e4aca209cb573b148
+          server: services-testnet
+
+        aura_val4:
+          ansible_host: 10.10.0.4
+          public_ip: 139.99.149.160
+          node_name: val4
+          node_type: validator
+          node_number: 4
+          node_daemon_home: /home/ubuntu/.aura-mvp-val4
+          node_rpc_port: 26757
+          node_p2p_port: 26756
+          node_grpc_port: 19090
+          node_service_name: aurad-mvp-val4
+          node_node_id: 5026a4c6b3b89cedb15cefddb9177fe03aea06b9
+          server: services-testnet
+
+    # Sentries group - sentry nodes for DDoS protection
+    sentries:
+      hosts:
+        aura_sentry1:
+          ansible_host: 10.10.0.1
+          public_ip: 158.69.119.76
+          node_name: sentry1
+          node_type: sentry
+          node_number: 1
+          node_daemon_home: /home/ubuntu/.aura-mvp-sentry1
+          node_rpc_port: 26680
+          node_p2p_port: 26681
+          node_grpc_port: 19290
+          node_service_name: aurad-mvp-sentry1
+          node_node_id: f5ce5e5ce5dd77bdbfd636fb8148756f6df9c531
+          server: aura-testnet
+
+        aura_sentry2:
+          ansible_host: 10.10.0.4
+          public_ip: 139.99.149.160
+          node_name: sentry2
+          node_type: sentry
+          node_number: 2
+          node_daemon_home: /home/ubuntu/.aura-mvp-sentry2
+          node_rpc_port: 26680
+          node_p2p_port: 26681
+          node_grpc_port: 19390
+          node_service_name: aurad-mvp-sentry2
+          node_node_id: 35fdadb8b017fc95023a384c7769b946f363294e
+          server: services-testnet
+
+    # All nodes combined (validators + sentries)
+    all_nodes:
+      children:
+        validators:
+        sentries:
+
+    # Server-based groups for targeting specific hosts
+    aura_testnet_server:
+      hosts:
+        aura_val1:
+        aura_val2:
+        aura_sentry1:
+      vars:
+        server_name: aura-testnet
+        public_ip: 158.69.119.76
+        vpn_ip: 10.10.0.1
+
+    services_testnet_server:
+      hosts:
+        aura_val3:
+        aura_val4:
+        aura_sentry2:
+      vars:
+        server_name: services-testnet
+        public_ip: 139.99.149.160
+        vpn_ip: 10.10.0.4
+
+    # Services (non-node infrastructure)
+    services:
+      hosts:
+        aura_services_primary:
+          ansible_host: 10.10.0.1
+          public_ip: 158.69.119.76
+          server: aura-testnet
+          services:
+            - aura-explorer
+            - aura-faucet
+            - aura-graphql
+            - aura-websocket-proxy
+            - aura-health
+
+        aura_services_secondary:
+          ansible_host: 10.10.0.4
+          public_ip: 139.99.149.160
+          server: services-testnet
+          services:
+            - aura-testnet-indexer
+
+  vars:
+    # Connection defaults
+    ansible_user: ubuntu
+    ansible_port: 22
+    ansible_python_interpreter: /usr/bin/python3
+    ansible_ssh_private_key_file: ~/.ssh/id_ed25519_testnet
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+
+    # Daemon user (separate from ansible connection user)
+    node_daemon_user: ubuntu
+    node_daemon_group: ubuntu
+
+    # Chain identity
+    chain: aura
+    chain_id: aura-mvp-1
+    daemon_name: aurad
+    service_prefix: aurad-mvp
+
+    # Binary locations
+    binary_path: "{{ daemon_home }}/cosmovisor/genesis/bin/aurad"
+    cosmovisor_path: "{{ daemon_home }}/cosmovisor"
+
+    # WireGuard VPN network
+    vpn_network: 10.10.0.0/24
+
+    # Monitoring ports
+    node_exporter_port: 9100
+    prometheus_port: 9090
+
+    # Sentry connection string (for external nodes)
+    sentry_peers: "f5ce5e5ce5dd77bdbfd636fb8148756f6df9c531@158.69.119.76:26681,35fdadb8b017fc95023a384c7769b946f363294e@139.99.149.160:26681"

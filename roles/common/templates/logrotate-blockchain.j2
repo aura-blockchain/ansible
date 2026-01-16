@@ -1,0 +1,12 @@
+# Managed by Ansible - DO NOT EDIT MANUALLY
+# Logrotate for blockchain logs
+
+/var/log/blockchain/*.log {
+    daily
+    rotate {{ backup_retention_days }}
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0644 root root
+}

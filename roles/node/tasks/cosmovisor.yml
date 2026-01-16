@@ -1,0 +1,65 @@
+---
+# Cosmovisor Installation Tasks
+
+- name: Check if Cosmovisor is already installed
+  ansible.builtin.stat:
+    path: /usr/local/bin/cosmovisor
+  register: node_cosmovisor_installed
+
+- name: Get installed Cosmovisor version
+  ansible.builtin.command: /usr/local/bin/cosmovisor version
+  register: node_cosmovisor_current_version
+  changed_when: false
+  failed_when: false
+  when: node_cosmovisor_installed.stat.exists
+
+- name: Set Cosmovisor needs installation flag
+  ansible.builtin.set_fact:
+    node_cosmovisor_needs_install: >-
+      {{ not node_cosmovisor_installed.stat.exists or
+         (node_cosmovisor_current_version.stdout is defined and
+          node_cosmovisor_version not in node_cosmovisor_current_version.stdout) }}
+
+- name: Create temporary GOPATH for cosmovisor installation
+  ansible.builtin.file:
+    path: "/tmp/cosmovisor-install/go"
+    state: directory
+    mode: "0755"
+  when: node_cosmovisor_needs_install
+
+- name: Install Cosmovisor via go install
+  ansible.builtin.shell: |
+    set -o pipefail
+    export PATH=$PATH:/usr/local/go/bin
+    export GOPATH=/tmp/cosmovisor-install/go
+    export GOBIN=/tmp/cosmovisor-install/go/bin
+    go install cosmossdk.io/tools/cosmovisor/cmd/cosmovisor@{{ node_cosmovisor_version }}
+  args:
+    creates: /tmp/cosmovisor-install/go/bin/cosmovisor
+    executable: /bin/bash
+  when: node_cosmovisor_needs_install
+
+- name: Copy Cosmovisor to /usr/local/bin
+  ansible.builtin.copy:
+    src: /tmp/cosmovisor-install/go/bin/cosmovisor
+    dest: /usr/local/bin/cosmovisor
+    mode: "0755"
+    remote_src: true
+  become: true
+  when: node_cosmovisor_needs_install
+
+- name: Clean up temporary GOPATH
+  ansible.builtin.file:
+    path: /tmp/cosmovisor-install
+    state: absent
+  when: node_cosmovisor_needs_install
+
+- name: Verify Cosmovisor installation
+  ansible.builtin.command: /usr/local/bin/cosmovisor version
+  register: node_cosmovisor_verify
+  changed_when: false
+  failed_when: "'cosmovisor version' not in node_cosmovisor_verify.stderr"
+
+- name: Display Cosmovisor version
+  ansible.builtin.debug:
+    msg: "Cosmovisor installed: {{ node_cosmovisor_verify.stderr | regex_search('cosmovisor version: v[0-9.]+') }}"

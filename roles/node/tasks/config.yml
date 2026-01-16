@@ -1,0 +1,31 @@
+---
+# Configuration Tasks
+
+- name: Deploy config.toml
+  ansible.builtin.template:
+    src: config.toml.j2
+    dest: "{{ node_daemon_home }}/config/config.toml"
+    owner: "{{ node_daemon_user }}"
+    group: "{{ node_daemon_group }}"
+    mode: "0644"
+    backup: true
+  become: true
+  notify: Restart aurad service
+
+- name: Deploy app.toml
+  ansible.builtin.template:
+    src: app.toml.j2
+    dest: "{{ node_daemon_home }}/config/app.toml"
+    owner: "{{ node_daemon_user }}"
+    group: "{{ node_daemon_group }}"
+    mode: "0644"
+    backup: true
+  become: true
+  notify: Restart aurad service
+
+- name: Set private peer IDs for sentry nodes
+  ansible.builtin.set_fact:
+    node_private_peer_ids: "{{ node_validator_node_ids | join(',') }}"
+  when:
+    - node_type == 'sentry'
+    - node_validator_node_ids | length > 0

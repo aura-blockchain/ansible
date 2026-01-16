@@ -1,0 +1,9 @@
+---
+# Default variables for monitoring role
+# Note: node_exporter variables are in the node_exporter role defaults
+
+monitoring_prometheus_version: "2.48.0"
+monitoring_prometheus_port: 9090
+monitoring_prometheus_scrape_interval: 15s
+
+monitoring_install_prometheus: false

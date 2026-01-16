@@ -1,0 +1,110 @@
+---
+# =============================================================================
+# AURA BLOCKCHAIN - RESTORE FROM SNAPSHOT
+# =============================================================================
+# Restore a node from a snapshot for fast sync
+#
+# Usage:
+#   ansible-playbook -i inventory/testnet.yml support_sync_snapshot.yml --limit aura_val1 \
+#     -e snapshot_url=https://artifacts.aurablockchain.org/aura-mvp-1/snapshots/latest.tar.lz4
+# =============================================================================
+
+- name: Restore from Snapshot
+  hosts: all_nodes
+  become: true
+  gather_facts: true
+
+  vars:
+    snapshot_url: ""
+    backup_existing: true
+
+  pre_tasks:
+    - name: Validate snapshot URL provided
+      ansible.builtin.fail:
+        msg: "snapshot_url is required. Use -e snapshot_url=<url>"
+      when: snapshot_url | length == 0
+
+    - name: Display restore info
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          Snapshot Restore: {{ inventory_hostname }}
+          ============================================
+          Snapshot URL: {{ snapshot_url }}
+          Backup existing: {{ backup_existing }}
+          ============================================
+
+  tasks:
+    - name: Stop node service
+      ansible.builtin.service:
+        name: "{{ node_service_name }}"
+        state: stopped
+
+    - name: Backup existing data directory
+      ansible.builtin.command: >
+        mv {{ node_daemon_home }}/data {{ node_daemon_home }}/data.backup.{{ ansible_date_time.epoch }}
+      args:
+        creates: "{{ node_daemon_home }}/data.backup.*"
+      when: backup_existing | bool
+      failed_when: false
+
+    - name: Remove existing data directory
+      ansible.builtin.file:
+        path: "{{ node_daemon_home }}/data"
+        state: absent
+      when: not backup_existing | bool
+
+    - name: Create fresh data directory
+      ansible.builtin.file:
+        path: "{{ node_daemon_home }}/data"
+        state: directory
+        owner: "{{ node_daemon_user }}"
+        group: "{{ node_daemon_group }}"
+        mode: '0755'
+
+    - name: Download and extract snapshot
+      ansible.builtin.shell: |
+        set -o pipefail
+        curl -L {{ snapshot_url }} | lz4 -d | tar -xf - -C {{ node_daemon_home }}/data
+      args:
+        executable: /bin/bash
+      register: snapshot_download
+      changed_when: true
+
+    - name: Fix data directory ownership
+      ansible.builtin.file:
+        path: "{{ node_daemon_home }}/data"
+        owner: "{{ node_daemon_user }}"
+        group: "{{ node_daemon_group }}"
+        recurse: true
+
+    - name: Start node service
+      ansible.builtin.service:
+        name: "{{ node_service_name }}"
+        state: started
+
+    - name: Wait for node to start
+      ansible.builtin.wait_for:
+        port: "{{ node_rpc_port }}"
+        host: 127.0.0.1
+        delay: 5
+        timeout: 60
+
+    - name: Check node status
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ node_rpc_port }}/status"
+        method: GET
+        return_content: true
+      register: node_status
+      retries: 3
+      delay: 5
+
+    - name: Display restore result
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          Snapshot Restore Complete
+          ============================================
+          Height: {{ node_status.json.result.sync_info.latest_block_height }}
+          Catching up: {{ node_status.json.result.sync_info.catching_up }}
+          ============================================

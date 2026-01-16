@@ -1,0 +1,64 @@
+---
+# Binary Installation Tasks
+
+- name: Set binary destination path
+  ansible.builtin.set_fact:
+    node_binary_dest: "{{ node_daemon_home }}/cosmovisor/genesis/bin/{{ node_daemon_name }}"
+
+- name: Check if binary already exists
+  ansible.builtin.stat:
+    path: "{{ node_binary_dest }}"
+  register: node_binary_exists
+
+- name: Download binary from URL
+  ansible.builtin.get_url:
+    url: "{{ node_binary_url }}"
+    dest: "{{ node_binary_dest }}"
+    owner: "{{ node_daemon_user }}"
+    group: "{{ node_daemon_group }}"
+    mode: "0755"
+  become: true
+  when:
+    - node_binary_url | length > 0
+    - not node_binary_exists.stat.exists
+
+- name: Copy binary from local path
+  ansible.builtin.copy:
+    src: "{{ node_binary_path }}"
+    dest: "{{ node_binary_dest }}"
+    owner: "{{ node_daemon_user }}"
+    group: "{{ node_daemon_group }}"
+    mode: "0755"
+    remote_src: true
+  become: true
+  when:
+    - node_binary_url | length == 0
+    - not node_binary_exists.stat.exists
+
+- name: Ensure binary is executable
+  ansible.builtin.file:
+    path: "{{ node_binary_dest }}"
+    owner: "{{ node_daemon_user }}"
+    group: "{{ node_daemon_group }}"
+    mode: "0755"
+  become: true
+
+- name: Create symlink to current binary
+  ansible.builtin.file:
+    src: "{{ node_daemon_home }}/cosmovisor/genesis"
+    dest: "{{ node_daemon_home }}/cosmovisor/current"
+    state: link
+    owner: "{{ node_daemon_user }}"
+    group: "{{ node_daemon_group }}"
+  become: true
+
+- name: Verify binary installation
+  ansible.builtin.command: "{{ node_binary_dest }} version"
+  register: node_binary_version
+  changed_when: false
+  become: true
+  become_user: "{{ node_daemon_user }}"
+
+- name: Display binary version
+  ansible.builtin.debug:
+    msg: "{{ node_daemon_name }} version: {{ node_binary_version.stdout }}"

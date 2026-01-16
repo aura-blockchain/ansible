@@ -1,0 +1,51 @@
+# {{ ansible_managed }}
+# AURA Blockchain Node Service - {{ node_name }}
+# Managed by Ansible - Do not edit manually
+
+[Unit]
+Description=AURA Blockchain Node ({{ node_name }})
+Documentation=https://docs.aurablockchain.org
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ node_daemon_user }}
+Group={{ node_daemon_group }}
+
+# Cosmovisor environment
+Environment="DAEMON_NAME={{ node_daemon_name }}"
+Environment="DAEMON_HOME={{ node_daemon_home }}"
+Environment="DAEMON_ALLOW_DOWNLOAD_BINARIES={{ node_cosmovisor_allow_download_binaries | lower }}"
+Environment="DAEMON_RESTART_AFTER_UPGRADE={{ node_cosmovisor_restart_after_upgrade | lower }}"
+Environment="DAEMON_LOG_BUFFER_SIZE={{ node_cosmovisor_log_buffer_size }}"
+Environment="UNSAFE_SKIP_BACKUP=true"
+
+# Go environment
+Environment="PATH=/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="GOPATH=/home/{{ node_daemon_user }}/go"
+
+# Start command
+ExecStart=/usr/local/bin/cosmovisor run start --home {{ node_daemon_home }}
+
+# Process management
+Restart=on-failure
+RestartSec=10
+LimitNOFILE=65535
+LimitNPROC=65535
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths={{ node_daemon_home }}
+ReadWritePaths=/var/log/{{ node_daemon_name }}
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=aurad-mvp-{{ node_name }}
+
+[Install]
+WantedBy=multi-user.target

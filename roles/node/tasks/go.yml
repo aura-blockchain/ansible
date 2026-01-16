@@ -1,0 +1,68 @@
+---
+# Go Installation Tasks
+
+- name: Check if Go is already installed
+  ansible.builtin.stat:
+    path: /usr/local/go/bin/go
+  register: node_go_installed
+
+- name: Get installed Go version
+  ansible.builtin.command: /usr/local/go/bin/go version
+  register: node_go_current_version
+  changed_when: false
+  failed_when: false
+  when: node_go_installed.stat.exists
+
+- name: Set Go needs installation flag
+  ansible.builtin.set_fact:
+    node_go_needs_install: >-
+      {{ not node_go_installed.stat.exists or
+         (node_go_current_version.stdout is defined and node_go_version not in node_go_current_version.stdout) }}
+
+- name: Download Go tarball
+  ansible.builtin.get_url:
+    url: "{{ node_go_download_url }}"
+    dest: "/tmp/go{{ node_go_version }}.linux-{{ node_go_arch }}.tar.gz"
+    mode: "0644"
+  when: node_go_needs_install
+
+- name: Remove existing Go installation
+  ansible.builtin.file:
+    path: /usr/local/go
+    state: absent
+  become: true
+  when: node_go_needs_install
+
+- name: Extract Go tarball
+  ansible.builtin.unarchive:
+    src: "/tmp/go{{ node_go_version }}.linux-{{ node_go_arch }}.tar.gz"
+    dest: /usr/local
+    remote_src: true
+  become: true
+  when: node_go_needs_install
+
+- name: Create Go PATH profile script
+  ansible.builtin.copy:
+    dest: /etc/profile.d/go.sh
+    content: |
+      # Go environment
+      export PATH=$PATH:/usr/local/go/bin
+      export GOPATH=$HOME/go
+      export PATH=$PATH:$GOPATH/bin
+    mode: "0644"
+  become: true
+
+- name: Clean up Go tarball
+  ansible.builtin.file:
+    path: "/tmp/go{{ node_go_version }}.linux-{{ node_go_arch }}.tar.gz"
+    state: absent
+  when: node_go_needs_install
+
+- name: Verify Go installation
+  ansible.builtin.command: /usr/local/go/bin/go version
+  register: node_go_verify
+  changed_when: false
+
+- name: Display Go version
+  ansible.builtin.debug:
+    msg: "Go installed: {{ node_go_verify.stdout }}"

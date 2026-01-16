@@ -1,0 +1,137 @@
+---
+# =============================================================================
+# AURA BLOCKCHAIN - BACKUP VALIDATOR KEYS
+# =============================================================================
+# Backup critical validator keys for migration or disaster recovery
+#
+# Usage:
+#   ansible-playbook -i inventory/testnet.yml support_backup_keys.yml --limit aura_val1
+#   ansible-playbook -i inventory/testnet.yml support_backup_keys.yml --limit aura_val1 -e backup_dir=/custom/path
+# =============================================================================
+
+- name: Backup Validator Keys
+  hosts: all_nodes
+  become: true
+  gather_facts: true
+
+  vars:
+    backup_dir: "/root/node-backups"
+    backup_timestamp: "{{ ansible_date_time.iso8601_basic_short }}"
+
+  pre_tasks:
+    - name: Display backup info
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          Key Backup: {{ inventory_hostname }}
+          ============================================
+          Node: {{ node_name }}
+          Home: {{ node_daemon_home }}
+          Backup dir: {{ backup_dir }}
+          ============================================
+
+  tasks:
+    - name: Create backup directory
+      ansible.builtin.file:
+        path: "{{ backup_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Check for validator key
+      ansible.builtin.stat:
+        path: "{{ node_daemon_home }}/config/priv_validator_key.json"
+      register: priv_key_stat
+
+    - name: Check for node key
+      ansible.builtin.stat:
+        path: "{{ node_daemon_home }}/config/node_key.json"
+      register: node_key_stat
+
+    - name: Check for validator state
+      ansible.builtin.stat:
+        path: "{{ node_daemon_home }}/data/priv_validator_state.json"
+      register: val_state_stat
+
+    - name: Fail if no keys found
+      ansible.builtin.fail:
+        msg: "No validator keys found at {{ node_daemon_home }}/config/"
+      when:
+        - not priv_key_stat.stat.exists
+        - not node_key_stat.stat.exists
+
+    - name: Create timestamped backup directory
+      ansible.builtin.file:
+        path: "{{ backup_dir }}/{{ node_name }}-{{ backup_timestamp }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Backup priv_validator_key.json
+      ansible.builtin.copy:
+        src: "{{ node_daemon_home }}/config/priv_validator_key.json"
+        dest: "{{ backup_dir }}/{{ node_name }}-{{ backup_timestamp }}/priv_validator_key.json"
+        remote_src: true
+        owner: root
+        group: root
+        mode: '0600'
+      when: priv_key_stat.stat.exists
+
+    - name: Backup node_key.json
+      ansible.builtin.copy:
+        src: "{{ node_daemon_home }}/config/node_key.json"
+        dest: "{{ backup_dir }}/{{ node_name }}-{{ backup_timestamp }}/node_key.json"
+        remote_src: true
+        owner: root
+        group: root
+        mode: '0600'
+      when: node_key_stat.stat.exists
+
+    - name: Backup priv_validator_state.json
+      ansible.builtin.copy:
+        src: "{{ node_daemon_home }}/data/priv_validator_state.json"
+        dest: "{{ backup_dir }}/{{ node_name }}-{{ backup_timestamp }}/priv_validator_state.json"
+        remote_src: true
+        owner: root
+        group: root
+        mode: '0600'
+      when: val_state_stat.stat.exists
+
+    - name: Create backup archive
+      community.general.archive:
+        path: "{{ backup_dir }}/{{ node_name }}-{{ backup_timestamp }}"
+        dest: "{{ backup_dir }}/{{ node_name }}-{{ backup_timestamp }}.tar.gz"
+        format: gz
+        owner: root
+        group: root
+        mode: '0600'
+
+    - name: Remove unarchived backup directory
+      ansible.builtin.file:
+        path: "{{ backup_dir }}/{{ node_name }}-{{ backup_timestamp }}"
+        state: absent
+
+    - name: Get backup file info
+      ansible.builtin.stat:
+        path: "{{ backup_dir }}/{{ node_name }}-{{ backup_timestamp }}.tar.gz"
+      register: backup_file
+
+    - name: Display backup result
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          Backup Complete: {{ inventory_hostname }}
+          ============================================
+          Archive: {{ backup_dir }}/{{ node_name }}-{{ backup_timestamp }}.tar.gz
+          Size: {{ backup_file.stat.size | human_readable }}
+          ============================================
+          Contents:
+          {% if priv_key_stat.stat.exists %}- priv_validator_key.json{% endif %}
+          {% if node_key_stat.stat.exists %}- node_key.json{% endif %}
+          {% if val_state_stat.stat.exists %}- priv_validator_state.json{% endif %}
+          ============================================
+          IMPORTANT: Copy this backup to secure offline storage!
+          scp {{ inventory_hostname }}:{{ backup_dir }}/{{ node_name }}-{{ backup_timestamp }}.tar.gz ./
+          ============================================

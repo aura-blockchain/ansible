@@ -1,0 +1,97 @@
+---
+# Cosmos Exporter role - Prometheus exporter for Cosmos SDK chains
+# Only deployed on validator nodes
+
+- name: Check if this is a validator node
+  ansible.builtin.set_fact:
+    cosmos_exporter_is_validator_node: "{{ 'validator' in group_names or 'val' in inventory_hostname }}"
+
+- name: Create cosmos_exporter user
+  ansible.builtin.user:
+    name: cosmos_exporter
+    shell: /usr/sbin/nologin
+    system: true
+    create_home: false
+  become: true
+  when: cosmos_exporter_is_validator_node | bool
+
+- name: Check if cosmos_exporter is installed
+  ansible.builtin.stat:
+    path: /usr/local/bin/cosmos-exporter
+  register: cosmos_exporter_binary_stat
+  when: cosmos_exporter_is_validator_node | bool
+
+- name: Set cosmos_exporter download URL
+  vars:
+    cosmos_exporter_base_url: "https://github.com/solarlabsteam/cosmos-exporter/releases/download"
+    cosmos_exporter_filename: "cosmos-exporter_{{ cosmos_exporter_version }}_linux_amd64.tar.gz"
+  ansible.builtin.set_fact:
+    cosmos_exporter_download_url: "{{ cosmos_exporter_base_url }}/v{{ cosmos_exporter_version }}/{{ cosmos_exporter_filename }}"
+
+- name: Download cosmos_exporter
+  ansible.builtin.get_url:
+    url: "{{ cosmos_exporter_download_url }}"
+    dest: "/tmp/cosmos-exporter-{{ cosmos_exporter_version }}.tar.gz"
+    mode: '0644'
+  when: >-
+    cosmos_exporter_is_validator_node | bool and
+    (not cosmos_exporter_binary_stat.stat.exists | default(true))
+
+- name: Extract cosmos_exporter
+  ansible.builtin.unarchive:
+    src: "/tmp/cosmos-exporter-{{ cosmos_exporter_version }}.tar.gz"
+    dest: /tmp
+    remote_src: true
+  when: cosmos_exporter_is_validator_node | bool and (not cosmos_exporter_binary_stat.stat.exists | default(true))
+
+- name: Install cosmos_exporter binary
+  ansible.builtin.copy:
+    src: /tmp/cosmos-exporter
+    dest: /usr/local/bin/cosmos-exporter
+    mode: '0755'
+    owner: root
+    group: root
+    remote_src: true
+  become: true
+  when: cosmos_exporter_is_validator_node | bool and (not cosmos_exporter_binary_stat.stat.exists | default(true))
+  notify:
+    - Cosmos exporter reload systemd
+    - Cosmos exporter restart service
+
+- name: Create cosmos_exporter systemd service for AURA
+  ansible.builtin.template:
+    src: aura-cosmos-exporter.service.j2
+    dest: /etc/systemd/system/aura-cosmos-exporter.service
+    mode: '0644'
+  become: true
+  when: cosmos_exporter_is_validator_node | bool
+  notify:
+    - Cosmos exporter reload systemd
+    - Cosmos exporter restart service
+
+- name: Allow cosmos_exporter port through UFW (VPN only)
+  community.general.ufw:
+    rule: allow
+    port: '{{ cosmos_exporter_port }}'
+    proto: tcp
+    from_ip: '{{ cosmos_exporter_vpn_network | default("10.10.0.0/24") }}'
+    comment: 'AURA Cosmos Exporter'
+  become: true
+  when: cosmos_exporter_is_validator_node | bool
+
+- name: Enable and start cosmos_exporter
+  ansible.builtin.service:
+    name: aura-cosmos-exporter
+    enabled: true
+    state: started
+  become: true
+  when: cosmos_exporter_is_validator_node | bool
+
+- name: Clean up downloaded files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "/tmp/cosmos-exporter-{{ cosmos_exporter_version }}.tar.gz"
+    - /tmp/cosmos-exporter
+  when: cosmos_exporter_is_validator_node | bool

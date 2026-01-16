@@ -1,0 +1,15 @@
+---
+# Default variables for cosmos_exporter role
+
+cosmos_exporter_version: '0.3.0'
+cosmos_exporter_port: 9300
+cosmos_exporter_tendermint_rpc: 'http://localhost:26657'
+cosmos_exporter_node: 'tcp://localhost:9090'
+cosmos_exporter_log_denom: 'uaura'
+cosmos_exporter_denom: 'aura'
+cosmos_exporter_denom_coefficient: '1000000'
+cosmos_exporter_bech_prefix: 'aura'
+cosmos_exporter_vpn_network: '10.10.0.0/24'
+
+# Chain-specific settings
+cosmos_exporter_chain_id: 'aura-mvp-1'

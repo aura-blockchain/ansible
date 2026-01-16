@@ -1,0 +1,35 @@
+# Managed by Ansible - DO NOT EDIT MANUALLY
+# AURA Prometheus configuration
+
+global:
+  scrape_interval: {{ prometheus_scrape_interval }}
+  evaluation_interval: 15s
+
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:{{ prometheus_port }}']
+
+  # Node Exporters (AURA servers)
+  - job_name: 'node'
+    static_configs:
+      - targets:
+          - '{{ aura_primary_vpn }}:{{ node_exporter_port }}'
+          - '{{ services_vpn }}:{{ node_exporter_port }}'
+        labels:
+          group: 'aura-validators'
+
+  # AURA validator metrics
+  - job_name: 'aura'
+    static_configs:
+      - targets:
+          - '{{ aura_primary_vpn }}:26660'
+        labels:
+          chain: 'aura'
+          server: 'primary'
+      - targets:
+          - '{{ services_vpn }}:26660'
+        labels:
+          chain: 'aura'
+          server: 'services'

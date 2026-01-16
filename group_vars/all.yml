@@ -1,0 +1,137 @@
+---
+# Global variables for AURA testnet infrastructure
+# AURA Blockchain - Ansible group_vars
+
+# =============================================================================
+# Chain Configuration (used by node role)
+# =============================================================================
+node_chain_name: "AURA"
+node_chain_id: "aura-mvp-1"
+node_daemon_name: "aurad"
+node_daemon_user: "ubuntu"
+node_bech_prefix: "aura"
+node_staking_denom: "uaura"
+node_denom_coefficient: 1000000
+
+# =============================================================================
+# Version Variables (prefixed by role)
+# =============================================================================
+node_go_version: "1.23.0"
+node_cosmovisor_version: "v1.5.0"
+tenderduty_version: "v2.2.1"
+cosmos_exporter_version: "0.3.0"
+node_exporter_version: "1.7.0"
+monitoring_prometheus_version: "2.48.0"
+monitoring_alertmanager_version: "0.26.0"
+monitoring_loki_version: "2.9.3"
+
+# =============================================================================
+# Directory Variables
+# =============================================================================
+node_backup_dir: "/home/{{ node_daemon_user }}/aura-backups"
+snapshot_dir: "/home/{{ node_daemon_user }}/aura-snapshots"
+node_log_dir: "/var/log/aura"
+node_go_install_path: /usr/local/go
+
+# =============================================================================
+# Network URLs (used by node role)
+# =============================================================================
+node_genesis_url: "https://artifacts.aurablockchain.org/aura-mvp-1/genesis.json"
+node_peers_url: "https://artifacts.aurablockchain.org/aura-mvp-1/peers.txt"
+
+# =============================================================================
+# Monitoring Ports (prefixed by role)
+# =============================================================================
+node_exporter_port: 9100
+monitoring_prometheus_port: 9090
+monitoring_alertmanager_port: 9093
+cosmos_exporter_port: 9300
+tenderduty_port: 8888
+monitoring_grafana_port: 3000
+
+# =============================================================================
+# Security (used by common role)
+# =============================================================================
+common_ufw_enabled: true
+common_ssh_port: 22
+common_vpn_network: "10.10.0.0/24"
+
+# SSH hardening
+common_ssh_permit_root: "no"
+common_ssh_password_auth: "no"
+
+# Firewall defaults
+common_ufw_default_incoming: deny
+common_ufw_default_outgoing: allow
+
+# =============================================================================
+# Secrets (SOPS variable references)
+# =============================================================================
+tenderduty_discord_webhook: "{{ vault_discord_webhook | default('') }}"
+tenderduty_telegram_bot_token: "{{ vault_telegram_bot_token | default('') }}"
+tenderduty_telegram_chat_id: "{{ vault_telegram_chat_id | default('') }}"
+
+# =============================================================================
+# System Configuration (used by common role)
+# =============================================================================
+common_timezone: UTC
+common_locale: en_US.UTF-8
+
+# Common packages
+common_packages:
+  - curl
+  - wget
+  - vim
+  - htop
+  - jq
+  - git
+  - make
+  - build-essential
+  - unzip
+  - tmux
+  - fail2ban
+  - ufw
+  - logrotate
+  - lz4
+
+# =============================================================================
+# Prometheus Configuration (monitoring role)
+# =============================================================================
+monitoring_prometheus_scrape_interval: 15s
+
+# =============================================================================
+# Nginx Configuration
+# =============================================================================
+nginx_worker_processes: auto
+nginx_worker_connections: 4096
+
+# =============================================================================
+# Cosmovisor Configuration (node role)
+# =============================================================================
+node_cosmovisor_allow_download: false
+node_cosmovisor_restart_after_upgrade: true
+
+# =============================================================================
+# Backup Settings
+# =============================================================================
+snapshot_retention_days: 7
+
+# =============================================================================
+# Maintenance
+# =============================================================================
+security_maintenance_reminder_day: 1
+security_update_check: weekly
+
+# =============================================================================
+# VPN Network for monitoring access (used by multiple roles)
+# =============================================================================
+node_exporter_vpn_network: "10.10.0.0/24"
+cosmos_exporter_vpn_network: "10.10.0.0/24"
+tenderduty_vpn_network: "10.10.0.0/24"
+
+# =============================================================================
+# Node configuration
+# =============================================================================
+node_configure_firewall: true
+node_service_enabled: true
+node_service_state: started

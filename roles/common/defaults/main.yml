@@ -1,0 +1,16 @@
+---
+# Default variables for common role
+
+# SSH settings
+common_ssh_port: 22
+common_ssh_max_auth_tries: 3
+
+# Fail2ban settings
+common_fail2ban_bantime: '1h'
+common_fail2ban_findtime: '10m'
+common_fail2ban_maxretry: 5
+common_fail2ban_ssh_maxretry: 3
+common_fail2ban_ignoreip: ''
+
+# Timezone
+common_timezone: UTC

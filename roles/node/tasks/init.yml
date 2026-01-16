@@ -1,0 +1,26 @@
+---
+# Node Initialization Tasks
+
+- name: Check if node is already initialized
+  ansible.builtin.stat:
+    path: "{{ node_daemon_home }}/config/genesis.json"
+  register: node_genesis_exists
+
+- name: Initialize node
+  ansible.builtin.command: >
+    {{ node_daemon_home }}/cosmovisor/genesis/bin/{{ node_daemon_name }} init {{ node_moniker }}
+    --chain-id {{ node_chain_id }}
+    --home {{ node_daemon_home }}
+  become: true
+  become_user: "{{ node_daemon_user }}"
+  changed_when: true
+  when: not node_genesis_exists.stat.exists
+
+- name: Set ownership of initialized directories
+  ansible.builtin.file:
+    path: "{{ node_daemon_home }}"
+    owner: "{{ node_daemon_user }}"
+    group: "{{ node_daemon_group }}"
+    recurse: true
+  become: true
+  when: not node_genesis_exists.stat.exists

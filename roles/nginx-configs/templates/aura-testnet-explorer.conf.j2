@@ -1,0 +1,43 @@
+# AURA Testnet Explorer - nginx config
+# Serves static frontend files and proxies API requests to backend
+
+server {
+    listen 80;
+    server_name testnet-explorer.aurablockchain.org;
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name testnet-explorer.aurablockchain.org;
+
+    ssl_certificate /etc/letsencrypt/live/aurablockchain.org/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/aurablockchain.org/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    root /home/{{ ansible_user }}/aura/explorer/frontend;
+    index index.html;
+
+    # Serve static files directly
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Proxy API requests to backend
+    location /api/ {
+        proxy_pass http://127.0.0.1:8082/api/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Health check
+    location /health {
+        proxy_pass http://127.0.0.1:8082/health;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+    }
+}

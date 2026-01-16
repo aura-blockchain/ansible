@@ -1,0 +1,27 @@
+---
+# AURA validator-specific variables
+
+# Node type
+node_type: validator
+
+# Snapshot configuration
+enable_snapshots: true
+
+# Pruning configuration (aggressive for validators)
+pruning: custom
+pruning_keep_recent: 100
+pruning_interval: 10
+indexer: "null"
+
+# Genesis and network
+genesis_url: https://artifacts.aurablockchain.org/aura-mvp-1/genesis.json
+seeds: ""
+persistent_peers: ""
+
+# Public endpoints
+public_rpc: testnet-rpc.aurablockchain.org
+public_api: testnet-api.aurablockchain.org
+public_grpc: testnet-grpc.aurablockchain.org
+
+# Service configuration (uses node_name from inventory)
+service_name: "aurad-mvp-{{ node_name }}"

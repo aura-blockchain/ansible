@@ -1,0 +1,235 @@
+# Prometheus Alert Rules for AURA Blockchain Testnet (aura-mvp-1)
+# Critical alerts for node health, chain status, and validator performance
+
+groups:
+  - name: node_health
+    rules:
+      # Node Exporter unreachable - server is down or network issue
+      - alert: NodeExporterDown
+        expr: up{job="node_exporter"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          chain_id: aura-mvp-1
+        annotations:
+          summary: "Node exporter down on {{ $labels.node_name }}"
+          description: "Node exporter on {{ $labels.node_name }} ({{ $labels.instance }}) has been unreachable for more than 2 minutes."
+
+      # Tendermint RPC unreachable
+      - alert: TendermintRPCDown
+        expr: up{job="tendermint"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          chain_id: aura-mvp-1
+        annotations:
+          summary: "Tendermint RPC down on {{ $labels.node_name }}"
+          description: "Tendermint RPC endpoint on {{ $labels.node_name }} ({{ $labels.instance }}) has been unreachable for more than 2 minutes."
+
+      # Cosmos exporter down (validator metrics unavailable)
+      - alert: CosmosExporterDown
+        expr: up{job="cosmos_exporter"} == 0
+        for: 3m
+        labels:
+          severity: warning
+          chain_id: aura-mvp-1
+        annotations:
+          summary: "Cosmos exporter down for {{ $labels.node_name }}"
+          description: "Cosmos exporter for validator {{ $labels.node_name }} has been unreachable for more than 3 minutes."
+
+  - name: chain_status
+    rules:
+      # Chain halted - no new blocks produced
+      - alert: ChainHalted
+        expr: increase(cometbft_consensus_height{job="tendermint_prometheus"}[5m]) == 0
+        for: 5m
+        labels:
+          severity: critical
+          chain_id: aura-mvp-1
+        annotations:
+          summary: "AURA chain halted - no new blocks"
+          description: "No new blocks have been produced on {{ $labels.node_name }} for more than 5 minutes. Chain may be halted."
+
+      # Alternative chain halt detection using latest block time
+      - alert: ChainHaltedNoBlocks
+        expr: time() - cometbft_consensus_latest_block_time{job="tendermint_prometheus"} > 300
+        for: 1m
+        labels:
+          severity: critical
+          chain_id: aura-mvp-1
+        annotations:
+          summary: "AURA chain halted - block time stale"
+          description: "Latest block on {{ $labels.node_name }} is more than 5 minutes old. Chain appears to be halted."
+
+      # Node out of sync with network
+      - alert: NodeOutOfSync
+        expr: cometbft_consensus_height{job="tendermint_prometheus"} < (max(cometbft_consensus_height{job="tendermint_prometheus"}) - 10)
+        for: 5m
+        labels:
+          severity: warning
+          chain_id: aura-mvp-1
+        annotations:
+          summary: "Node {{ $labels.node_name }} is out of sync"
+          description: "Node {{ $labels.node_name }} is more than 10 blocks behind the highest node in the network."
+
+      # Node significantly behind (catching up)
+      - alert: NodeCatchingUp
+        expr: cometbft_consensus_catching_up{job="tendermint_prometheus"} == 1
+        for: 10m
+        labels:
+          severity: warning
+          chain_id: aura-mvp-1
+        annotations:
+          summary: "Node {{ $labels.node_name }} is catching up"
+          description: "Node {{ $labels.node_name }} has been in catching up state for more than 10 minutes."
+
+  - name: validator_performance
+    rules:
+      # Validator missing blocks (consecutive missed signatures)
+      - alert: ValidatorMissingBlocks
+        expr: cometbft_consensus_validator_missed_blocks{job="tendermint_prometheus"} > 5
+        for: 2m
+        labels:
+          severity: critical
+          chain_id: aura-mvp-1
+        annotations:
+          summary: "Validator {{ $labels.node_name }} missing blocks"
+          description: "Validator {{ $labels.node_name }} has missed more than 5 consecutive blocks. Risk of jailing."
+
+      # Validator not signing (power is 0 or not in active set)
+      - alert: ValidatorNotSigning
+        expr: cometbft_consensus_validator_power{job="tendermint_prometheus", node_type="validator"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          chain_id: aura-mvp-1
+        annotations:
+          summary: "Validator {{ $labels.node_name }} not in active set"
+          description: "Validator {{ $labels.node_name }} has 0 voting power. May be jailed or unbonded."
+
+      # Low peer count - network connectivity issues
+      - alert: LowPeerCount
+        expr: cometbft_p2p_peers{job="tendermint_prometheus"} < 3
+        for: 5m
+        labels:
+          severity: warning
+          chain_id: aura-mvp-1
+        annotations:
+          summary: "Low peer count on {{ $labels.node_name }}"
+          description: "Node {{ $labels.node_name }} has only {{ $value }} peers connected. Minimum recommended is 3."
+
+      # Very low peer count - critical connectivity issue
+      - alert: CriticalPeerCount
+        expr: cometbft_p2p_peers{job="tendermint_prometheus"} < 1
+        for: 2m
+        labels:
+          severity: critical
+          chain_id: aura-mvp-1
+        annotations:
+          summary: "Critical peer count on {{ $labels.node_name }}"
+          description: "Node {{ $labels.node_name }} has no peers connected. Node is isolated from the network."
+
+  - name: system_resources
+    rules:
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+          chain_id: aura-mvp-1
+        annotations:
+          summary: "High memory usage on {{ $labels.node_name }}"
+          description: "Memory usage on {{ $labels.node_name }} is at {{ $value | printf \"%.1f\" }}% for more than 5 minutes."
+
+      # Critical memory usage
+      - alert: CriticalMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 95
+        for: 2m
+        labels:
+          severity: critical
+          chain_id: aura-mvp-1
+        annotations:
+          summary: "Critical memory usage on {{ $labels.node_name }}"
+          description: "Memory usage on {{ $labels.node_name }} is at {{ $value | printf \"%.1f\" }}%. Risk of OOM."
+
+      # High disk usage
+      - alert: HighDiskUsage
+        expr: (1 - (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"})) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          chain_id: aura-mvp-1
+        annotations:
+          summary: "High disk usage on {{ $labels.node_name }}"
+          description: "Disk usage on {{ $labels.node_name }} is at {{ $value | printf \"%.1f\" }}%. Consider cleanup or expansion."
+
+      # Critical disk usage
+      - alert: CriticalDiskUsage
+        expr: (1 - (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"})) * 100 > 95
+        for: 2m
+        labels:
+          severity: critical
+          chain_id: aura-mvp-1
+        annotations:
+          summary: "Critical disk usage on {{ $labels.node_name }}"
+          description: "Disk usage on {{ $labels.node_name }} is at {{ $value | printf \"%.1f\" }}%. Immediate action required."
+
+      # High CPU usage
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance, node_name) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 90
+        for: 10m
+        labels:
+          severity: warning
+          chain_id: aura-mvp-1
+        annotations:
+          summary: "High CPU usage on {{ $labels.node_name }}"
+          description: "CPU usage on {{ $labels.node_name }} has been above 90% for more than 10 minutes."
+
+      # High load average
+      - alert: HighLoadAverage
+        expr: node_load15 / count by(instance, node_name) (node_cpu_seconds_total{mode="idle"}) > 2
+        for: 15m
+        labels:
+          severity: warning
+          chain_id: aura-mvp-1
+        annotations:
+          summary: "High load average on {{ $labels.node_name }}"
+          description: "15-minute load average on {{ $labels.node_name }} is {{ $value | printf \"%.2f\" }} times the CPU count."
+
+  - name: network_health
+    rules:
+      # High network receive errors
+      - alert: HighNetworkReceiveErrors
+        expr: rate(node_network_receive_errs_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          chain_id: aura-mvp-1
+        annotations:
+          summary: "High network receive errors on {{ $labels.node_name }}"
+          description: "Network interface on {{ $labels.node_name }} is experiencing receive errors at {{ $value | printf \"%.1f\" }} per second."
+
+      # High network transmit errors
+      - alert: HighNetworkTransmitErrors
+        expr: rate(node_network_transmit_errs_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          chain_id: aura-mvp-1
+        annotations:
+          summary: "High network transmit errors on {{ $labels.node_name }}"
+          description: "Network interface on {{ $labels.node_name }} is experiencing transmit errors at {{ $value | printf \"%.1f\" }} per second."
+
+  - name: service_health
+    rules:
+      # Systemd service not running
+      - alert: SystemdServiceDown
+        expr: node_systemd_unit_state{name=~"aurad-mvp.*\\.service", state="active"} != 1
+        for: 2m
+        labels:
+          severity: critical
+          chain_id: aura-mvp-1
+        annotations:
+          summary: "AURA service {{ $labels.name }} is down"
+          description: "Systemd service {{ $labels.name }} on {{ $labels.node_name }} is not in active state."

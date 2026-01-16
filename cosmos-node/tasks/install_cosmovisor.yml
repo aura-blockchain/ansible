@@ -1,0 +1,16 @@
+---
+# Install Cosmovisor
+
+- name: Check if Cosmovisor is installed
+  ansible.builtin.stat:
+    path: /usr/local/bin/cosmovisor
+  register: cosmovisor_installed
+
+- name: Install Cosmovisor
+  ansible.builtin.shell: |
+    export PATH=$PATH:/usr/local/go/bin
+    go install cosmossdk.io/tools/cosmovisor/cmd/cosmovisor@{{ cosmovisor_version }}
+    cp ~/go/bin/cosmovisor /usr/local/bin/
+  args:
+    creates: /usr/local/bin/cosmovisor
+  when: not cosmovisor_installed.stat.exists

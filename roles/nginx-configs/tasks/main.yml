@@ -1,0 +1,55 @@
+---
+# Deploy nginx configuration files for AURA services
+
+- name: Ensure nginx is installed
+  ansible.builtin.package:
+    name: nginx
+    state: present
+  when: nginx_configs_enabled
+
+- name: Check if nginx conf.d directory exists
+  ansible.builtin.stat:
+    path: /etc/nginx/conf.d
+  register: nginx_configs_confd_stat
+
+- name: Check if nginx sites-available directory exists
+  ansible.builtin.stat:
+    path: /etc/nginx/sites-available
+  register: nginx_configs_sites_available_stat
+
+- name: Deploy explorer nginx configuration
+  ansible.builtin.template:
+    src: aura-testnet-explorer.conf.j2
+    dest: /etc/nginx/sites-available/aura-testnet-explorer.conf
+    owner: root
+    group: root
+    mode: "0644"
+    backup: "{{ nginx_configs_backup }}"
+  notify: Reload nginx
+  when:
+    - nginx_configs_enabled
+    - nginx_configs_sites_available_stat.stat.exists
+
+- name: Enable explorer site configuration
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/aura-testnet-explorer.conf
+    dest: /etc/nginx/sites-enabled/aura-testnet-explorer.conf
+    state: link
+  notify: Reload nginx
+  when:
+    - nginx_configs_enabled
+    - nginx_configs_sites_available_stat.stat.exists
+
+- name: Verify nginx configuration syntax
+  ansible.builtin.command: nginx -t
+  changed_when: false
+  when:
+    - nginx_configs_enabled
+    - nginx_configs_validate
+
+- name: Ensure nginx service is running
+  ansible.builtin.service:
+    name: nginx
+    state: started
+    enabled: true
+  when: nginx_configs_enabled

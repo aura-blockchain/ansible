@@ -1,0 +1,126 @@
+---
+# =============================================================================
+# AURA BLOCKCHAIN - RESYNC / RECOVERY
+# =============================================================================
+# Reset and resync a node from scratch or recover from corruption
+#
+# Usage:
+#   Full resync:    ansible-playbook -i inventory/testnet.yml support_resync.yml --limit aura_val1
+#   Keep addrbook:  ansible-playbook -i inventory/testnet.yml support_resync.yml --limit aura_val1 -e keep_addrbook=true
+# =============================================================================
+
+- name: Node Resync
+  hosts: all_nodes
+  become: true
+  gather_facts: true
+
+  vars:
+    keep_addrbook: false
+    keep_priv_validator_state: true
+
+  pre_tasks:
+    - name: Display resync info
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          Node Resync: {{ inventory_hostname }}
+          ============================================
+          Keep addrbook: {{ keep_addrbook }}
+          Keep priv_validator_state: {{ keep_priv_validator_state }}
+          ============================================
+          WARNING: This will delete chain data!
+          ============================================
+
+    - name: Confirm resync
+      ansible.builtin.pause:
+        prompt: "Press ENTER to continue or Ctrl+C to abort"
+      when: not ansible_check_mode
+
+  tasks:
+    - name: Stop node service
+      ansible.builtin.service:
+        name: "{{ node_service_name }}"
+        state: stopped
+
+    - name: Backup priv_validator_state.json
+      ansible.builtin.copy:
+        src: "{{ node_daemon_home }}/data/priv_validator_state.json"
+        dest: "/tmp/priv_validator_state.json.backup"
+        remote_src: true
+        mode: '0600'
+      when: keep_priv_validator_state | bool
+      failed_when: false
+
+    - name: Backup addrbook.json
+      ansible.builtin.copy:
+        src: "{{ node_daemon_home }}/config/addrbook.json"
+        dest: "/tmp/addrbook.json.backup"
+        remote_src: true
+        mode: '0644'
+      when: keep_addrbook | bool
+      failed_when: false
+
+    - name: Reset node (unsafe-reset-all)
+      ansible.builtin.command: >
+        {{ node_daemon_home }}/cosmovisor/genesis/bin/{{ node_daemon_name }} tendermint unsafe-reset-all
+        --home {{ node_daemon_home }}
+        --keep-addr-book={{ keep_addrbook | lower }}
+      become: true
+      become_user: "{{ node_daemon_user }}"
+      changed_when: true
+
+    - name: Restore priv_validator_state.json
+      ansible.builtin.copy:
+        src: "/tmp/priv_validator_state.json.backup"
+        dest: "{{ node_daemon_home }}/data/priv_validator_state.json"
+        remote_src: true
+        owner: "{{ node_daemon_user }}"
+        group: "{{ node_daemon_group }}"
+        mode: '0600'
+      when: keep_priv_validator_state | bool
+      failed_when: false
+
+    - name: Restore addrbook.json
+      ansible.builtin.copy:
+        src: "/tmp/addrbook.json.backup"
+        dest: "{{ node_daemon_home }}/config/addrbook.json"
+        remote_src: true
+        owner: "{{ node_daemon_user }}"
+        group: "{{ node_daemon_group }}"
+        mode: '0644'
+      when: keep_addrbook | bool
+      failed_when: false
+
+    - name: Start node service
+      ansible.builtin.service:
+        name: "{{ node_service_name }}"
+        state: started
+
+    - name: Wait for node to start syncing
+      ansible.builtin.wait_for:
+        port: "{{ node_rpc_port }}"
+        host: 127.0.0.1
+        delay: 10
+        timeout: 120
+
+    - name: Check node status
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ node_rpc_port }}/status"
+        method: GET
+        return_content: true
+      register: node_status
+      retries: 3
+      delay: 5
+
+    - name: Display resync result
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          Resync Started: {{ inventory_hostname }}
+          ============================================
+          Height: {{ node_status.json.result.sync_info.latest_block_height }}
+          Catching up: {{ node_status.json.result.sync_info.catching_up }}
+          ============================================
+          Node is syncing from genesis. This may take hours.
+          Monitor with: journalctl -u {{ node_service_name }} -f
+          ============================================

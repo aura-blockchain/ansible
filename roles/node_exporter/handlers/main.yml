@@ -1,0 +1,13 @@
+---
+# Handlers for node_exporter role
+
+- name: Node exporter reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+  become: true
+
+- name: Node exporter restart service
+  ansible.builtin.service:
+    name: node_exporter
+    state: restarted
+  become: true

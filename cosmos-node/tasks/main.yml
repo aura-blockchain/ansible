@@ -1,0 +1,117 @@
+---
+# AURA Cosmos SDK node deployment
+
+- name: Include chain-specific variables
+  ansible.builtin.include_vars: "{{ chain }}.yml"
+  ignore_errors: true
+
+- name: Create daemon user
+  ansible.builtin.user:
+    name: "{{ daemon_user }}"
+    shell: /bin/bash
+    create_home: yes
+    state: present
+
+- name: Install Go
+  ansible.builtin.include_tasks: install_go.yml
+
+- name: Install Cosmovisor
+  ansible.builtin.include_tasks: install_cosmovisor.yml
+
+- name: Create Cosmovisor directory structure
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ daemon_user }}"
+    group: "{{ daemon_user }}"
+    mode: '0755'
+  loop:
+    - "{{ cosmovisor_path }}"
+    - "{{ cosmovisor_path }}/genesis/bin"
+    - "{{ cosmovisor_path }}/upgrades"
+    - "{{ daemon_home }}/config"
+    - "{{ daemon_home }}/data"
+
+- name: Check if binary exists
+  ansible.builtin.stat:
+    path: "{{ binary_path }}"
+  register: binary_stat
+
+- name: Copy binary if provided
+  ansible.builtin.copy:
+    src: "{{ local_binary_path }}"
+    dest: "{{ binary_path }}"
+    owner: "{{ daemon_user }}"
+    group: "{{ daemon_user }}"
+    mode: '0755'
+  when:
+    - local_binary_path is defined
+    - not binary_stat.stat.exists or force_update | default(false)
+  notify: restart cosmos service
+
+- name: Configure CometBFT config.toml
+  ansible.builtin.template:
+    src: config.toml.j2
+    dest: "{{ daemon_home }}/config/config.toml"
+    owner: "{{ daemon_user }}"
+    group: "{{ daemon_user }}"
+    mode: '0644'
+  notify: restart cosmos service
+
+- name: Configure app.toml
+  ansible.builtin.template:
+    src: app.toml.j2
+    dest: "{{ daemon_home }}/config/app.toml"
+    owner: "{{ daemon_user }}"
+    group: "{{ daemon_user }}"
+    mode: '0644'
+  notify: restart cosmos service
+
+- name: Download genesis file if not present
+  ansible.builtin.get_url:
+    url: "{{ genesis_url }}"
+    dest: "{{ daemon_home }}/config/genesis.json"
+    owner: "{{ daemon_user }}"
+    group: "{{ daemon_user }}"
+    mode: '0644'
+  when: genesis_url is defined
+
+- name: Create systemd service
+  ansible.builtin.template:
+    src: cosmos.service.j2
+    dest: "/etc/systemd/system/{{ service_name }}.service"
+    owner: root
+    group: root
+    mode: '0644'
+  notify:
+    - reload systemd
+    - restart cosmos service
+
+- name: Allow P2P port through UFW
+  community.general.ufw:
+    rule: allow
+    port: "{{ p2p_port }}"
+    proto: tcp
+
+- name: Allow RPC port through UFW (localhost only for validators)
+  community.general.ufw:
+    rule: allow
+    port: "{{ rpc_port }}"
+    proto: tcp
+    from_ip: "{{ '10.10.0.0/24' if node_type == 'validator' else 'any' }}"
+
+- name: Enable and start cosmos service
+  ansible.builtin.service:
+    name: "{{ service_name }}"
+    state: started
+    enabled: yes
+
+- name: Wait for node to start
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ rpc_port }}/status"
+    return_content: yes
+  register: node_status
+  until: node_status.status == 200
+  retries: 30
+  delay: 10
+  ignore_errors: yes

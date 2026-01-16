@@ -1,0 +1,74 @@
+---
+# =============================================================================
+# AURA BLOCKCHAIN - PRUNING OPERATIONS
+# =============================================================================
+# Prune chain data to reclaim disk space
+#
+# Usage:
+#   ansible-playbook -i inventory/testnet.yml support_prune.yml --limit aura_val1
+# =============================================================================
+
+- name: Pruning Operations
+  hosts: all_nodes
+  become: true
+  gather_facts: true
+
+  vars:
+    prune_keep_recent: "100"
+    prune_interval: "10"
+
+  pre_tasks:
+    - name: Display pruning info
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          Pruning: {{ inventory_hostname }}
+          ============================================
+          Keep recent: {{ prune_keep_recent }}
+          Interval: {{ prune_interval }}
+          ============================================
+
+  tasks:
+    - name: Get current disk usage
+      ansible.builtin.command: du -sh {{ node_daemon_home }}/data
+      register: disk_before
+      changed_when: false
+
+    - name: Display current disk usage
+      ansible.builtin.debug:
+        msg: "Current data directory size: {{ disk_before.stdout }}"
+
+    - name: Update app.toml pruning settings
+      ansible.builtin.lineinfile:
+        path: "{{ node_daemon_home }}/config/app.toml"
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+      loop:
+        - regexp: '^pruning = '
+          line: 'pruning = "custom"'
+        - regexp: '^pruning-keep-recent = '
+          line: 'pruning-keep-recent = "{{ prune_keep_recent }}"'
+        - regexp: '^pruning-interval = '
+          line: 'pruning-interval = "{{ prune_interval }}"'
+      notify: Restart node service
+
+    - name: Display pruning config updated
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          Pruning Configuration Updated
+          ============================================
+          pruning = "custom"
+          pruning-keep-recent = "{{ prune_keep_recent }}"
+          pruning-interval = "{{ prune_interval }}"
+          ============================================
+          Note: Actual pruning happens automatically
+          during block processing. Disk space will
+          be reclaimed gradually.
+          ============================================
+
+  handlers:
+    - name: Restart node service
+      ansible.builtin.service:
+        name: "{{ node_service_name }}"
+        state: restarted

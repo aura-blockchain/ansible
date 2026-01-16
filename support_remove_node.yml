@@ -1,0 +1,142 @@
+---
+# =============================================================================
+# AURA BLOCKCHAIN - CLEAN NODE REMOVAL
+# =============================================================================
+# Completely remove a node installation
+#
+# Usage:
+#   ansible-playbook -i inventory/testnet.yml support_remove_node.yml --limit aura_val1
+# =============================================================================
+
+- name: Remove Node
+  hosts: all_nodes
+  become: true
+  gather_facts: true
+
+  vars:
+    confirm_removal: false
+    keep_keys: true
+
+  pre_tasks:
+    - name: Display removal warning
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          NODE REMOVAL: {{ inventory_hostname }}
+          ============================================
+          WARNING: This will permanently remove:
+          - Node service: {{ node_service_name }}
+          - Data directory: {{ node_daemon_home }}
+          - Monitoring services
+          ============================================
+          Keep validator keys: {{ keep_keys }}
+          ============================================
+
+    - name: Require explicit confirmation
+      ansible.builtin.fail:
+        msg: "Set -e confirm_removal=true to proceed"
+      when: not confirm_removal | bool
+
+  tasks:
+    - name: Stop node service
+      ansible.builtin.service:
+        name: "{{ node_service_name }}"
+        state: stopped
+      failed_when: false
+
+    - name: Disable node service
+      ansible.builtin.service:
+        name: "{{ node_service_name }}"
+        enabled: false
+      failed_when: false
+
+    - name: Backup validator keys
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "/root/{{ node_name }}-{{ item | basename }}.backup"
+        remote_src: true
+        mode: '0600'
+      loop:
+        - "{{ node_daemon_home }}/config/priv_validator_key.json"
+        - "{{ node_daemon_home }}/config/node_key.json"
+      when: keep_keys | bool
+      failed_when: false
+
+    - name: Remove node service file
+      ansible.builtin.file:
+        path: "/etc/systemd/system/{{ node_service_name }}.service"
+        state: absent
+
+    - name: Reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: Remove node data directory
+      ansible.builtin.file:
+        path: "{{ node_daemon_home }}"
+        state: absent
+
+    - name: Stop tenderduty
+      ansible.builtin.service:
+        name: aura-tenderduty
+        state: stopped
+        enabled: false
+      when: node_type == 'validator'
+      failed_when: false
+
+    - name: Stop cosmos_exporter
+      ansible.builtin.service:
+        name: aura-cosmos-exporter
+        state: stopped
+        enabled: false
+      when: node_type == 'validator'
+      failed_when: false
+
+    - name: Remove tenderduty service
+      ansible.builtin.file:
+        path: /etc/systemd/system/aura-tenderduty.service
+        state: absent
+      when: node_type == 'validator'
+      failed_when: false
+
+    - name: Remove cosmos_exporter service
+      ansible.builtin.file:
+        path: /etc/systemd/system/aura-cosmos-exporter.service
+        state: absent
+      when: node_type == 'validator'
+      failed_when: false
+
+    - name: Remove firewall rules for node ports
+      community.general.ufw:
+        rule: allow
+        port: "{{ item }}"
+        proto: tcp
+        delete: true
+      loop:
+        - "{{ node_p2p_port }}"
+        - "{{ node_rpc_port }}"
+      failed_when: false
+      when: ansible_os_family == 'Debian'
+
+    - name: Reload systemd after service removal
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: Display removal result
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          Node Removed: {{ inventory_hostname }}
+          ============================================
+          Removed:
+          - Service: {{ node_service_name }}
+          - Data: {{ node_daemon_home }}
+          - Monitoring services (if validator)
+          - Firewall rules for ports {{ node_p2p_port }}, {{ node_rpc_port }}
+          ============================================
+          {% if keep_keys %}
+          Validator keys backed up to:
+          - /root/{{ node_name }}-priv_validator_key.json.backup
+          - /root/{{ node_name }}-node_key.json.backup
+          {% endif %}
+          ============================================

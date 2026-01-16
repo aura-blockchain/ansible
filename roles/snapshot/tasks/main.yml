@@ -1,0 +1,60 @@
+---
+# Snapshot role - Automated blockchain state snapshots
+# Disabled by default, enable with snapshot_enabled: true
+
+- name: Create snapshot directory
+  ansible.builtin.file:
+    path: "{{ snapshot_dir }}"
+    state: directory
+    owner: "{{ ansible_user | default('ubuntu') }}"
+    group: "{{ ansible_user | default('ubuntu') }}"
+    mode: '0755'
+  become: true
+  when: snapshot_enabled | bool
+
+- name: Create snapshot script directory
+  ansible.builtin.file:
+    path: /opt/aura/scripts
+    state: directory
+    owner: "{{ ansible_user | default('ubuntu') }}"
+    group: "{{ ansible_user | default('ubuntu') }}"
+    mode: '0755'
+  become: true
+  when: snapshot_enabled | bool
+
+- name: Deploy AURA snapshot script
+  ansible.builtin.template:
+    src: aura-snapshot.sh.j2
+    dest: /opt/aura/scripts/aura-snapshot.sh
+    owner: "{{ ansible_user | default('ubuntu') }}"
+    group: "{{ ansible_user | default('ubuntu') }}"
+    mode: '0755'
+  become: true
+  when: snapshot_enabled | bool
+
+- name: Configure snapshot cron job
+  ansible.builtin.cron:
+    name: "AURA daily snapshot"
+    minute: "{{ snapshot_cron_minute | default('0') }}"
+    hour: "{{ snapshot_cron_hour | default('0') }}"
+    job: "/opt/aura/scripts/aura-snapshot.sh >> /var/log/aura-snapshot.log 2>&1"
+    user: "{{ ansible_user | default('ubuntu') }}"
+    state: "{{ 'present' if snapshot_enabled else 'absent' }}"
+  become: true
+
+- name: Create logrotate configuration for snapshot logs
+  ansible.builtin.copy:
+    dest: /etc/logrotate.d/aura-snapshot
+    content: |
+      /var/log/aura-snapshot.log {
+          daily
+          rotate 7
+          compress
+          delaycompress
+          missingok
+          notifempty
+          create 0640 {{ ansible_user | default('ubuntu') }} {{ ansible_user | default('ubuntu') }}
+      }
+    mode: '0644'
+  become: true
+  when: snapshot_enabled | bool
