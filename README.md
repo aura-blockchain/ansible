@@ -42,7 +42,8 @@ ansible-playbook -i inventory/testnet.yml main.yml
 | `support_snapshot.yml` | Create chain snapshot |
 | `support_sync_snapshot.yml` | Sync from snapshot |
 | `support_state_sync.yml` | State-sync from peers |
-| `support_resync.yml` | Full resync from genesis |
+| `support_genesis_sync.yml` | Full sync from genesis (archive node) |
+| `support_resync.yml` | Reset and resync (keeps genesis) |
 | `support_prune.yml` | Prune chain data |
 
 ## Roles

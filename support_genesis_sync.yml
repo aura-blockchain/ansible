@@ -1,0 +1,276 @@
+---
+# =============================================================================
+# AURA BLOCKCHAIN - GENESIS SYNC (ARCHIVE NODE)
+# =============================================================================
+# Resets node to sync from genesis block (full archive sync)
+#
+# Usage:
+#   ansible-playbook -i inventory/testnet.yml support_genesis_sync.yml --limit aura_val1
+#   ansible-playbook -i inventory/testnet.yml support_genesis_sync.yml --limit aura_sentry1
+#
+# WARNING: Full sync from genesis takes significant time and disk space.
+# Use support_state_sync.yml or support_sync_snapshot.yml for faster bootstrapping.
+#
+# Use Cases:
+#   - Deploy archive node with full block history
+#   - Recover corrupted node with fresh state
+#   - Verify chain integrity from genesis
+# =============================================================================
+
+- name: AURA Genesis Sync
+  hosts: all_nodes
+  become: true
+  gather_facts: true
+
+  vars:
+    # Genesis source
+    genesis_sync_genesis_url: "https://artifacts.aurablockchain.org/aura-mvp-1/genesis.json"
+    # Peers source
+    genesis_sync_peers_url: "https://artifacts.aurablockchain.org/aura-mvp-1/peers.txt"
+    # Addrbook source (optional, speeds up peer discovery)
+    genesis_sync_addrbook_url: "https://artifacts.aurablockchain.org/aura-mvp-1/addrbook.json"
+    # Whether to download fresh addrbook
+    genesis_sync_use_addrbook: true
+
+  pre_tasks:
+    - name: Validate required variables
+      ansible.builtin.assert:
+        that:
+          - node_daemon_home is defined
+          - node_service_name is defined
+        fail_msg: "Required variables node_daemon_home and node_service_name must be defined"
+
+    - name: Display genesis sync warning
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          GENESIS SYNC: {{ inventory_hostname }}
+          ============================================
+          WARNING: This will:
+            1. Stop the node service
+            2. Wipe all chain data
+            3. Download fresh genesis and peers
+            4. Sync from block 1
+          ============================================
+          This process can take hours or days depending on chain height.
+          For faster sync, use support_state_sync.yml or support_sync_snapshot.yml
+          ============================================
+
+    - name: Confirm genesis sync
+      ansible.builtin.pause:
+        prompt: "Press ENTER to continue with genesis sync or Ctrl+C to abort"
+      when: not ansible_check_mode
+
+  tasks:
+    - name: Stop node service
+      ansible.builtin.systemd:
+        name: "{{ node_service_name }}"
+        state: stopped
+      failed_when: false
+
+    - name: Wait for service to stop
+      ansible.builtin.pause:
+        seconds: 5
+
+    # Backup validator keys
+    - name: Check if priv_validator_key.json exists
+      ansible.builtin.stat:
+        path: "{{ node_daemon_home }}/config/priv_validator_key.json"
+      register: genesis_sync_priv_validator_key
+
+    - name: Backup priv_validator_key.json
+      ansible.builtin.copy:
+        src: "{{ node_daemon_home }}/config/priv_validator_key.json"
+        dest: "{{ node_daemon_home }}/priv_validator_key.json.backup"
+        remote_src: true
+        owner: "{{ node_daemon_user }}"
+        group: "{{ node_daemon_group }}"
+        mode: '0600'
+      when: genesis_sync_priv_validator_key.stat.exists
+
+    - name: Check if node_key.json exists
+      ansible.builtin.stat:
+        path: "{{ node_daemon_home }}/config/node_key.json"
+      register: genesis_sync_node_key
+
+    - name: Backup node_key.json
+      ansible.builtin.copy:
+        src: "{{ node_daemon_home }}/config/node_key.json"
+        dest: "{{ node_daemon_home }}/node_key.json.backup"
+        remote_src: true
+        owner: "{{ node_daemon_user }}"
+        group: "{{ node_daemon_group }}"
+        mode: '0600'
+      when: genesis_sync_node_key.stat.exists
+
+    # Wipe chain data
+    - name: Remove existing data directory
+      ansible.builtin.file:
+        path: "{{ node_daemon_home }}/data"
+        state: absent
+
+    - name: Create fresh data directory
+      ansible.builtin.file:
+        path: "{{ node_daemon_home }}/data"
+        state: directory
+        owner: "{{ node_daemon_user }}"
+        group: "{{ node_daemon_group }}"
+        mode: '0755'
+
+    - name: Create initial priv_validator_state.json
+      ansible.builtin.copy:
+        content: |
+          {
+            "height": "0",
+            "round": 0,
+            "step": 0
+          }
+        dest: "{{ node_daemon_home }}/data/priv_validator_state.json"
+        owner: "{{ node_daemon_user }}"
+        group: "{{ node_daemon_group }}"
+        mode: '0600'
+
+    # Download fresh genesis
+    - name: Download fresh genesis.json
+      ansible.builtin.get_url:
+        url: "{{ genesis_sync_genesis_url }}"
+        dest: "{{ node_daemon_home }}/config/genesis.json"
+        owner: "{{ node_daemon_user }}"
+        group: "{{ node_daemon_group }}"
+        mode: '0644'
+        force: true
+
+    # Restore validator keys
+    - name: Check if priv_validator_key backup exists
+      ansible.builtin.stat:
+        path: "{{ node_daemon_home }}/priv_validator_key.json.backup"
+      register: genesis_sync_priv_validator_key_backup
+
+    - name: Restore priv_validator_key.json
+      ansible.builtin.copy:
+        src: "{{ node_daemon_home }}/priv_validator_key.json.backup"
+        dest: "{{ node_daemon_home }}/config/priv_validator_key.json"
+        remote_src: true
+        owner: "{{ node_daemon_user }}"
+        group: "{{ node_daemon_group }}"
+        mode: '0600'
+      when: genesis_sync_priv_validator_key_backup.stat.exists
+
+    - name: Check if node_key backup exists
+      ansible.builtin.stat:
+        path: "{{ node_daemon_home }}/node_key.json.backup"
+      register: genesis_sync_node_key_backup
+
+    - name: Restore node_key.json
+      ansible.builtin.copy:
+        src: "{{ node_daemon_home }}/node_key.json.backup"
+        dest: "{{ node_daemon_home }}/config/node_key.json"
+        remote_src: true
+        owner: "{{ node_daemon_user }}"
+        group: "{{ node_daemon_group }}"
+        mode: '0600'
+      when: genesis_sync_node_key_backup.stat.exists
+
+    # Update peers
+    - name: Download peers list
+      ansible.builtin.uri:
+        url: "{{ genesis_sync_peers_url }}"
+        return_content: true
+      register: genesis_sync_peers
+      delegate_to: localhost
+      become: false
+
+    - name: Update persistent_peers in config.toml
+      ansible.builtin.lineinfile:
+        path: "{{ node_daemon_home }}/config/config.toml"
+        regexp: '^persistent_peers\s*='
+        line: 'persistent_peers = "{{ genesis_sync_peers.content | trim }}"'
+
+    # Download addrbook (optional)
+    - name: Check if addrbook URL is accessible
+      ansible.builtin.uri:
+        url: "{{ genesis_sync_addrbook_url }}"
+        method: HEAD
+      register: genesis_sync_addrbook_check
+      delegate_to: localhost
+      become: false
+      failed_when: false
+      when: genesis_sync_use_addrbook
+
+    - name: Download addrbook.json
+      ansible.builtin.get_url:
+        url: "{{ genesis_sync_addrbook_url }}"
+        dest: "{{ node_daemon_home }}/config/addrbook.json"
+        owner: "{{ node_daemon_user }}"
+        group: "{{ node_daemon_group }}"
+        mode: '0644'
+        force: true
+      when:
+        - genesis_sync_use_addrbook
+        - genesis_sync_addrbook_check.status is defined
+        - genesis_sync_addrbook_check.status == 200
+
+    # Ensure state sync is disabled (we want full sync)
+    - name: Check if config.toml exists
+      ansible.builtin.stat:
+        path: "{{ node_daemon_home }}/config/config.toml"
+      register: genesis_sync_config_toml
+
+    - name: Disable state sync in config.toml
+      ansible.builtin.replace:
+        path: "{{ node_daemon_home }}/config/config.toml"
+        regexp: '^\[statesync\]\nenable = true'
+        replace: '[statesync]\nenable = false'
+      when: genesis_sync_config_toml.stat.exists
+      failed_when: false
+
+    # Clean up
+    - name: Clean up backup files
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ node_daemon_home }}/priv_validator_key.json.backup"
+        - "{{ node_daemon_home }}/node_key.json.backup"
+
+    # Start node
+    - name: Start node service
+      ansible.builtin.systemd:
+        name: "{{ node_service_name }}"
+        state: started
+        daemon_reload: true
+
+    - name: Wait for node to start
+      ansible.builtin.wait_for:
+        port: "{{ node_rpc_port }}"
+        host: 127.0.0.1
+        delay: 10
+        timeout: 120
+
+    - name: Check node sync status
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ node_rpc_port }}/status"
+        method: GET
+        return_content: true
+      register: genesis_sync_node_status
+      retries: 6
+      delay: 10
+      until: genesis_sync_node_status.status == 200
+      failed_when: false
+
+    - name: Display sync status
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          GENESIS SYNC INITIATED: {{ inventory_hostname }}
+          ============================================
+          Catching Up: {{ (genesis_sync_node_status.json.result.sync_info.catching_up) | default('unknown') }}
+          Current Height: {{ (genesis_sync_node_status.json.result.sync_info.latest_block_height) | default('unknown') }}
+          ============================================
+          Genesis sync will take significant time.
+          Monitor progress with:
+            journalctl -u {{ node_service_name }} -f
+          Check current height:
+            curl -s http://127.0.0.1:{{ node_rpc_port }}/status | jq -r '.result.sync_info.latest_block_height'
+          ============================================
+      when: genesis_sync_node_status is succeeded
