@@ -1,5 +1,5 @@
 ---
-# Handlers for nginx-configs role
+# Handlers for nginx_configs role
 
 - name: Validate nginx configuration
   ansible.builtin.command: nginx -t

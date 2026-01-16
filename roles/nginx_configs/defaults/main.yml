@@ -1,5 +1,5 @@
 ---
-# Default variables for nginx-configs role
+# Default variables for nginx_configs role
 
 # Enable/disable the role
 nginx_configs_enabled: true

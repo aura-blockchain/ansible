@@ -3,13 +3,13 @@
 
 - name: Include chain-specific variables
   ansible.builtin.include_vars: "{{ chain }}.yml"
-  ignore_errors: true
+  failed_when: false
 
 - name: Create daemon user
   ansible.builtin.user:
     name: "{{ daemon_user }}"
     shell: /bin/bash
-    create_home: yes
+    create_home: true
     state: present
 
 - name: Install Go
@@ -47,7 +47,7 @@
   when:
     - local_binary_path is defined
     - not binary_stat.stat.exists or force_update | default(false)
-  notify: restart cosmos service
+  notify: Restart cosmos service
 
 - name: Configure CometBFT config.toml
   ansible.builtin.template:
@@ -56,7 +56,7 @@
     owner: "{{ daemon_user }}"
     group: "{{ daemon_user }}"
     mode: '0644'
-  notify: restart cosmos service
+  notify: Restart cosmos service
 
 - name: Configure app.toml
   ansible.builtin.template:
@@ -65,7 +65,7 @@
     owner: "{{ daemon_user }}"
     group: "{{ daemon_user }}"
     mode: '0644'
-  notify: restart cosmos service
+  notify: Restart cosmos service
 
 - name: Download genesis file if not present
   ansible.builtin.get_url:
@@ -84,8 +84,8 @@
     group: root
     mode: '0644'
   notify:
-    - reload systemd
-    - restart cosmos service
+    - Reload systemd
+    - Restart cosmos service
 
 - name: Allow P2P port through UFW
   community.general.ufw:
@@ -104,14 +104,14 @@
   ansible.builtin.service:
     name: "{{ service_name }}"
     state: started
-    enabled: yes
+    enabled: true
 
 - name: Wait for node to start
   ansible.builtin.uri:
     url: "http://127.0.0.1:{{ rpc_port }}/status"
-    return_content: yes
+    return_content: true
   register: node_status
   until: node_status.status == 200
   retries: 30
   delay: 10
-  ignore_errors: yes
+  failed_when: false

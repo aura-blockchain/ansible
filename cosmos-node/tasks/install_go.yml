@@ -29,7 +29,7 @@
   ansible.builtin.unarchive:
     src: "/tmp/go{{ go_version }}.linux-amd64.tar.gz"
     dest: /usr/local
-    remote_src: yes
+    remote_src: true
   when: not go_installed.stat.exists or go_version not in go_version_check.stdout | default('')
 
 - name: Add Go to system PATH

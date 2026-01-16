@@ -4,21 +4,23 @@
 - name: Check if Prometheus is installed
   ansible.builtin.stat:
     path: /usr/local/bin/prometheus
-  register: prometheus_installed
+  register: monitoring_prometheus_installed
 
 - name: Download Prometheus
   ansible.builtin.get_url:
-    url: "https://github.com/prometheus/prometheus/releases/download/v{{ monitoring_prometheus_version }}/prometheus-{{ monitoring_prometheus_version }}.linux-amd64.tar.gz"
+    url: >-
+      https://github.com/prometheus/prometheus/releases/download/
+      v{{ monitoring_prometheus_version }}/prometheus-{{ monitoring_prometheus_version }}.linux-amd64.tar.gz
     dest: "/tmp/prometheus-{{ monitoring_prometheus_version }}.linux-amd64.tar.gz"
     mode: '0644'
-  when: not prometheus_installed.stat.exists
+  when: not monitoring_prometheus_installed.stat.exists
 
 - name: Extract Prometheus
   ansible.builtin.unarchive:
     src: "/tmp/prometheus-{{ monitoring_prometheus_version }}.linux-amd64.tar.gz"
     dest: /tmp
     remote_src: true
-  when: not prometheus_installed.stat.exists
+  when: not monitoring_prometheus_installed.stat.exists
 
 - name: Install Prometheus binaries
   ansible.builtin.copy:
@@ -31,7 +33,7 @@
   loop:
     - prometheus
     - promtool
-  when: not prometheus_installed.stat.exists
+  when: not monitoring_prometheus_installed.stat.exists
   notify: Restart prometheus
 
 - name: Configure Prometheus
