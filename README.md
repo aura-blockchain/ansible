@@ -1,210 +1,139 @@
-# AURA Testnet Ansible Deployment
+# AURA Validator Infrastructure
 
-Ansible playbooks for deploying and managing the AURA testnet infrastructure.
+Ansible playbooks for deploying and managing AURA blockchain validators, sentries, and supporting infrastructure.
 
-## Prerequisites
+Based on [Polkachu's cosmos-validators](https://github.com/polkachu/cosmos-validators) patterns.
 
-- Ansible 2.15 or newer
-- SSH access to target servers (hudson@)
-- SOPS + age for secrets decryption
+## Features
 
-### Install Ansible
-
-```bash
-pip install ansible>=2.15
-```
-
-### Install Galaxy Collections
-
-```bash
-ansible-galaxy install -r requirements.yml
-```
-
-Or let the deploy script handle it automatically.
+- Multi-node validator deployment with sentry architecture
+- Cosmovisor for automated upgrades
+- Security hardening (SSH, fail2ban, UFW)
+- Prometheus monitoring stack (node_exporter, cosmos_exporter)
+- Tenderduty validator alerting
+- Automated snapshots and state-sync
+- WireGuard VPN for private validator network
 
 ## Quick Start
 
 ```bash
-# Full deployment (all hosts, all tasks)
-./deploy.sh
+# Install dependencies
+pip install ansible>=2.15
+ansible-galaxy install -r requirements.yml
 
-# Dry run first (recommended)
-./deploy.sh --check
+# Deploy (dry run first)
+ansible-playbook -i inventory/testnet.yml main.yml --check --diff
 
-# Show what would change
-./deploy.sh --check --diff
+# Full deployment
+ansible-playbook -i inventory/testnet.yml main.yml
 ```
 
-## Common Commands
+## Playbooks
 
-```bash
-# Deploy to a single server
-./deploy.sh --limit aura-testnet
+| Playbook | Description |
+|----------|-------------|
+| `main.yml` | Full node deployment |
+| `setup.yml` | Initial server setup |
+| `support_backup_keys.yml` | Backup validator keys |
+| `support_restore_keys.yml` | Restore validator keys |
+| `support_migrate_node.yml` | Migrate node to new server |
+| `support_remove_node.yml` | Decommission a node |
+| `support_monitoring.yml` | Deploy monitoring stack |
+| `support_snapshot.yml` | Create chain snapshot |
+| `support_sync_snapshot.yml` | Sync from snapshot |
+| `support_state_sync.yml` | State-sync from peers |
+| `support_resync.yml` | Full resync from genesis |
+| `support_prune.yml` | Prune chain data |
 
-# Deploy only security configurations
-./deploy.sh --tags security
+## Roles
 
-# Update monitoring stack
-./deploy.sh --tags monitoring
-
-# Deploy firewall rules only
-./deploy.sh --tags firewall
-
-# Update node exporters on validators
-./deploy.sh --tags node_exporter --limit validators
-
-# Full security hardening
-./deploy.sh --tags security,firewall,wireguard
-
-# Verbose output for debugging
-./deploy.sh -vvv
-```
-
-## Available Tags
-
-| Tag | Description |
-|-----|-------------|
-| `common` | Base system packages, users, directories |
-| `security` | SSH hardening, fail2ban, security limits |
-| `firewall` | UFW firewall rules |
-| `wireguard` | WireGuard VPN configuration |
-| `monitoring` | All monitoring components |
-| `node_exporter` | Prometheus node exporter |
-| `cosmos_exporter` | Cosmos-specific metrics exporter |
-| `tenderduty` | Validator monitoring and alerting |
-| `alertmanager` | Prometheus Alertmanager |
-| `promtail` | Log shipping to Loki |
-| `logging` | Centralized logging configuration |
-| `snapshot` | Automated snapshot scripts |
-| `health` | Health check daemons |
+| Role | Description |
+|------|-------------|
+| `common` | Base packages, users, directories |
+| `security` | SSH hardening, fail2ban, limits |
+| `node` | Cosmos SDK node with Cosmovisor |
+| `nginx` | Reverse proxy with TLS, CORS, rate limiting |
+| `monitoring` | Prometheus server |
+| `node_exporter` | System metrics |
+| `cosmos_exporter` | Chain metrics |
+| `tenderduty` | Validator alerting |
+| `snapshot` | Automated snapshots |
+| `wireguard` | VPN configuration |
 
 ## Directory Structure
 
 ```
-ansible/
-├── ansible.cfg           # Ansible configuration
-├── requirements.yml      # Galaxy collection dependencies
-├── deploy.sh             # Deployment wrapper script
-├── site.yml              # Main playbook
+├── main.yml                 # Main deployment playbook
+├── setup.yml                # Initial server setup
+├── support_*.yml            # Operational playbooks
 ├── inventory/
-│   └── testnet.yml       # Host inventory
+│   └── testnet.yml          # Host inventory
 ├── group_vars/
-│   ├── all.yml           # Variables for all hosts
-│   ├── validators.yml    # Validator-specific vars
-│   └── sentries.yml      # Sentry-specific vars
-├── host_vars/
-│   ├── aura-testnet.yml  # Per-host variables
-│   └── services-testnet.yml
-├── roles/
-│   ├── common/           # Base system setup
-│   ├── security/         # Security hardening
-│   ├── firewall/         # UFW configuration
-│   ├── wireguard/        # VPN setup
-│   ├── cosmos_node/      # Cosmos node deployment
-│   ├── monitoring/       # Prometheus, Grafana
-│   ├── node_exporter/    # Prometheus node exporter
-│   ├── cosmos_exporter/  # Cosmos metrics
-│   ├── tenderduty/       # Validator monitoring
-│   ├── promtail/         # Log shipping
-│   └── health/           # Health checks
-└── .ansible_cache/       # Fact cache (gitignored)
+│   ├── all.yml              # Global variables
+│   └── validators.yml       # Validator-specific vars
+├── roles/                   # Ansible roles
+└── files/                   # Static files (dashboards, alerts)
 ```
 
-## SOPS Integration
+## Configuration
 
-Sensitive variables are encrypted with SOPS. The playbooks expect decrypted values to be available at runtime.
+### Inventory
 
-### Decrypt secrets for use
-
-```bash
-export SOPS_AGE_KEY_FILE=~/.config/sops/age/aura/keys.txt
-sops -d ../../secrets/testnet.yaml
-```
-
-### Use in playbooks
-
-Secrets should be loaded via `lookup` or pre-decrypted environment variables:
+Edit `inventory/testnet.yml` to define your hosts:
 
 ```yaml
-# In group_vars/all.yml
-cloudflare_api_token: "{{ lookup('env', 'CLOUDFLARE_API_TOKEN') }}"
+all:
+  children:
+    validators:
+      hosts:
+        val1:
+          ansible_host: 1.2.3.4
+          node_type: validator
+    sentries:
+      hosts:
+        sentry1:
+          ansible_host: 5.6.7.8
+          node_type: sentry
 ```
 
-Or use the SOPS lookup plugin:
+### Variables
+
+Key variables in `group_vars/all.yml`:
 
 ```yaml
-cloudflare_api_token: "{{ lookup('community.sops.sops', '../../secrets/testnet.yaml', extract='cloudflare.api_token') }}"
+chain_id: "aura-mvp-1"
+chain_binary: "aurad"
+go_version: "1.21.6"
 ```
 
-## Host Groups
-
-| Group | Hosts | Description |
-|-------|-------|-------------|
-| `validators` | aura-testnet, services-testnet | Validator nodes |
-| `sentries` | aura-testnet, services-testnet | Sentry nodes |
-| `all` | All hosts | Every server |
-
-## Troubleshooting
-
-### Connection Issues
+## Usage Examples
 
 ```bash
-# Test connectivity
-ansible all -m ping
+# Deploy to specific host
+ansible-playbook -i inventory/testnet.yml main.yml --limit val1
 
-# Test with verbose output
-ansible all -m ping -vvv
+# Run specific tags
+ansible-playbook -i inventory/testnet.yml main.yml --tags monitoring
 
-# Test specific host
-ansible aura-testnet -m ping
+# Create snapshot
+ansible-playbook -i inventory/testnet.yml support_snapshot.yml --limit val1
+
+# State-sync a new node
+ansible-playbook -i inventory/testnet.yml support_state_sync.yml --limit sentry1
 ```
 
-### SSH Key Issues
+## Requirements
 
-```bash
-# Verify SSH key
-ssh -i ~/.ssh/id_ed25519 hudson@158.69.119.76
+- Ansible 2.15+
+- Python 3.10+
+- SSH access to target servers
+- Target servers: Ubuntu 22.04/24.04
 
-# Check ansible.cfg
-cat ansible.cfg | grep private_key_file
-```
+## License
 
-### Galaxy Collection Missing
+MIT - See [LICENSE.md](LICENSE.md)
 
-```bash
-# Force reinstall collections
-ansible-galaxy collection install -r requirements.yml --force
-```
+## Acknowledgments
 
-### Fact Cache Issues
-
-```bash
-# Clear fact cache
-rm -rf .ansible_cache/*
-
-# Disable caching temporarily
-ANSIBLE_CACHE_PLUGIN=memory ./deploy.sh
-```
-
-### Check Mode Differences
-
-```bash
-# See what would change without applying
-./deploy.sh --check --diff
-
-# Verbose check mode
-./deploy.sh --check --diff -vv
-```
-
-## Server Information
-
-| Server | SSH Alias | Public IP | VPN IP |
-|--------|-----------|-----------|--------|
-| aura-testnet | `ssh aura-testnet` | 158.69.119.76 | 10.10.0.1 |
-| services-testnet | `ssh services-testnet` | 139.99.149.160 | 10.10.0.4 |
-
-## Related Documentation
-
-- [AURA Testnet Architecture](../../docs/architecture.md)
-- [Secrets Management](../../secrets/README.md)
-- [Monitoring Stack](../monitoring/README.md)
+- [Polkachu](https://polkachu.com/) for the validator playbook patterns
+- [Cosmos SDK](https://cosmos.network/) community

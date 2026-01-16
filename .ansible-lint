@@ -1,0 +1,42 @@
+# Ansible-lint configuration for AURA infrastructure
+# https://ansible.readthedocs.io/projects/lint/configuring/
+
+# Mark this directory as the project root
+project_dir: .
+
+# Profile: production (strictest)
+profile: production
+
+# Exclude paths from linting
+exclude_paths:
+  - .git/
+  - .ansible_cache/
+  - collections/
+  - logs/
+
+# Skip specific rules if needed (prefer fixing over skipping)
+# skip_list:
+#   - name[casing]
+
+# Warn but don't fail on these rules
+warn_list:
+  - experimental
+
+# Enable offline mode (don't download anything)
+offline: false
+
+# Use progressive mode (only fail on new violations)
+# progressive: true
+
+# Parseable output for CI integration
+# parseable: true
+
+# Show rule IDs in output
+# rulesdir:
+#   - ./custom_rules/
+
+# Task naming requirements
+task_name_prefix: "{stem} | "
+
+# Variable naming
+var_naming_pattern: "^[a-z_][a-z0-9_]*$"
