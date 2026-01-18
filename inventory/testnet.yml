@@ -16,7 +16,9 @@ all:
           node_daemon_home: /home/ubuntu/.aura-mvp-val1
           node_rpc_port: 26657
           node_p2p_port: 26656
-          node_grpc_port: 19090
+          node_grpc_port: 9090
+          node_api_port: 1317
+          node_prometheus_port: 26660
           node_service_name: aurad-mvp-val1
           node_node_id: e07f0f1d927504521957d2a4e025ff2266097f3c
           server: aura-testnet
@@ -30,7 +32,9 @@ all:
           node_daemon_home: /home/ubuntu/.aura-mvp-val2
           node_rpc_port: 26757
           node_p2p_port: 26756
-          node_grpc_port: 19190
+          node_grpc_port: 9190
+          node_api_port: 1417
+          node_prometheus_port: 26760
           node_service_name: aurad-mvp-val2
           node_node_id: efd4c11d67c1c3b7f75b0e5123487a30959c721a
           server: aura-testnet
@@ -44,7 +48,9 @@ all:
           node_daemon_home: /home/ubuntu/.aura-mvp-val3
           node_rpc_port: 26657
           node_p2p_port: 26656
-          node_grpc_port: 19190
+          node_grpc_port: 9094
+          node_api_port: 1317
+          node_prometheus_port: 26760
           node_service_name: aurad-mvp-val3
           node_node_id: e760686c2f86456b8d1b666e4aca209cb573b148
           server: services-testnet
@@ -58,7 +64,9 @@ all:
           node_daemon_home: /home/ubuntu/.aura-mvp-val4
           node_rpc_port: 26757
           node_p2p_port: 26756
-          node_grpc_port: 19090
+          node_grpc_port: 9091
+          node_api_port: 1318
+          node_prometheus_port: 26660
           node_service_name: aurad-mvp-val4
           node_node_id: 5026a4c6b3b89cedb15cefddb9177fe03aea06b9
           server: services-testnet
@@ -75,7 +83,9 @@ all:
           node_daemon_home: /home/ubuntu/.aura-mvp-sentry1
           node_rpc_port: 26680
           node_p2p_port: 26681
-          node_grpc_port: 19290
+          node_grpc_port: 9092
+          node_api_port: 1319
+          node_prometheus_port: 26860
           node_service_name: aurad-mvp-sentry1
           node_node_id: f5ce5e5ce5dd77bdbfd636fb8148756f6df9c531
           server: aura-testnet
@@ -89,7 +99,9 @@ all:
           node_daemon_home: /home/ubuntu/.aura-mvp-sentry2
           node_rpc_port: 26680
           node_p2p_port: 26681
-          node_grpc_port: 19390
+          node_grpc_port: 9092
+          node_api_port: 1319
+          node_prometheus_port: 26860
           node_service_name: aurad-mvp-sentry2
           node_node_id: 35fdadb8b017fc95023a384c7769b946f363294e
           server: services-testnet

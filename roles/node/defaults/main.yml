@@ -68,7 +68,8 @@ node_grpc_enabled: true
 
 # Prometheus metrics
 node_prometheus_enabled: true
-node_prometheus_listen_addr: ":26660"
+node_prometheus_port: 26660
+node_prometheus_listen_addr: ":{{ node_prometheus_port }}"
 
 # Cosmovisor environment
 node_cosmovisor_allow_download_binaries: false

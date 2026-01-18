@@ -146,28 +146,28 @@ scrape_configs:
           chain_id: 'aura-mvp-1'
           server: 'aura-testnet'
       # Sentry1 Prometheus port
-      - targets: ['10.10.0.1:26690']
+      - targets: ['10.10.0.1:26860']
         labels:
           node_name: 'sentry1'
           node_type: 'sentry'
           chain_id: 'aura-mvp-1'
           server: 'aura-testnet'
       # Val3 Prometheus port
-      - targets: ['10.10.0.4:26660']
+      - targets: ['10.10.0.4:26760']
         labels:
           node_name: 'val3'
           node_type: 'validator'
           chain_id: 'aura-mvp-1'
           server: 'services-testnet'
       # Val4 Prometheus port
-      - targets: ['10.10.0.4:26760']
+      - targets: ['10.10.0.4:26660']
         labels:
           node_name: 'val4'
           node_type: 'validator'
           chain_id: 'aura-mvp-1'
           server: 'services-testnet'
       # Sentry2 Prometheus port
-      - targets: ['10.10.0.4:26690']
+      - targets: ['10.10.0.4:26860']
         labels:
           node_name: 'sentry2'
           node_type: 'sentry'

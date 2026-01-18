@@ -23,16 +23,33 @@ tenderduty_telegram_enabled: false
 tenderduty_telegram_token: ''
 tenderduty_telegram_chat_id: ''
 
+# Slack settings (leave empty to disable)
+tenderduty_slack_enabled: true
+tenderduty_slack_webhook: ''
+
 # Pagerduty (leave empty to disable)
 tenderduty_pagerduty_enabled: false
 tenderduty_pagerduty_key: ''
 
 # Chain-specific settings
 tenderduty_chain_id: 'aura-mvp-1'
-tenderduty_chain_name: 'AURA MVP Testnet'
+tenderduty_chain_name: 'AURA'
 tenderduty_tendermint_rpc: 'http://localhost:26657'
 
-# Validator settings
+# Multiple validators configuration
+# Each validator has: name, valoper_address, rpc_url
+tenderduty_validators:
+  - name: 'val2'
+    valoper_address: 'auravaloper1thxqel5nxzymaqy9yrucu360lcsyrqxt74hrst'
+    rpc_url: 'http://127.0.0.1:26757'
+  - name: 'val3'
+    valoper_address: 'auravaloper1wdzwr3xs827rvqzex6j83jj7438g0m3xl04has'
+    rpc_url: 'http://10.10.0.4:26657'
+  - name: 'val4'
+    valoper_address: 'auravaloper1eqwfxnrdy8mcj6swzt4c2hg8a2dd24yc0fknte'
+    rpc_url: 'http://10.10.0.4:26757'
+
+# Legacy single validator (deprecated, use tenderduty_validators)
 tenderduty_validator_address: ''
 tenderduty_valoper_address: ''
 

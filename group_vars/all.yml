@@ -65,10 +65,19 @@ common_ufw_default_incoming: deny
 common_ufw_default_outgoing: allow
 
 # =============================================================================
-# Secrets (SOPS variable references)
+# Tenderduty Alerting Configuration
 # =============================================================================
+# Slack alerting (enabled by default for AURA)
+tenderduty_slack_enabled: true
+tenderduty_slack_webhook: "{{ vault_slack_webhook | default('') }}"
+
+# Discord alerting (disabled)
+tenderduty_discord_enabled: false
 tenderduty_discord_webhook: "{{ vault_discord_webhook | default('') }}"
-tenderduty_telegram_bot_token: "{{ vault_telegram_bot_token | default('') }}"
+
+# Telegram alerting (disabled)
+tenderduty_telegram_enabled: false
+tenderduty_telegram_token: "{{ vault_telegram_bot_token | default('') }}"
 tenderduty_telegram_chat_id: "{{ vault_telegram_chat_id | default('') }}"
 
 # =============================================================================

@@ -3,8 +3,9 @@
 
 cosmos_exporter_version: '0.3.0'
 cosmos_exporter_port: 9300
-cosmos_exporter_tendermint_rpc: 'http://localhost:26657'
-cosmos_exporter_node: 'tcp://localhost:9090'
+# Use node_rpc_port and node_grpc_port from inventory if defined
+cosmos_exporter_tendermint_rpc: "http://localhost:{{ node_rpc_port | default(26657) }}"
+cosmos_exporter_node: "tcp://localhost:{{ node_grpc_port | default(9090) }}"
 cosmos_exporter_log_denom: 'uaura'
 cosmos_exporter_denom: 'aura'
 cosmos_exporter_denom_coefficient: '1000000'
