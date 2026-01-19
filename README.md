@@ -45,6 +45,7 @@ ansible-playbook -i inventory/testnet.yml main.yml
 | `support_genesis_sync.yml` | Full sync from genesis (archive node) |
 | `support_resync.yml` | Reset and resync (keeps genesis) |
 | `support_prune.yml` | Prune chain data |
+| `support_enforce_hermit_rules.yml` | Enforce validator/sentry hermit rules |
 
 ## Roles
 
@@ -129,6 +130,32 @@ ansible-playbook -i inventory/testnet.yml support_state_sync.yml --limit sentry1
 - Python 3.10+
 - SSH access to target servers
 - Target servers: Ubuntu 22.04/24.04
+
+## Validator/Sentry Hermit Rules
+
+This infrastructure follows the validator/sentry hermit architecture defined in `blockchain-projects/shared/cosmos-validator-and-sentry-rules.txt`:
+
+**Validators (hermit mode):**
+- `pex = false` - Do not discover public peers
+- `persistent_peers` - Only connect to trusted sentries
+- `addr_book_strict = false` - Allow private IP connections
+- API/gRPC disabled, RPC bound to localhost only
+
+**Sentries (public-facing):**
+- `pex = true` - Discover public peers for block gossip
+- `persistent_peers` - All validators + other sentries
+- `private_peer_ids` - All validator node IDs (never gossip them)
+- API/gRPC/RPC publicly accessible
+
+Use `support_enforce_hermit_rules.yml` to verify and enforce these rules:
+
+```bash
+# Dry run (check compliance without changes)
+ansible-playbook -i inventory/testnet.yml support_enforce_hermit_rules.yml --check
+
+# Enforce rules
+ansible-playbook -i inventory/testnet.yml support_enforce_hermit_rules.yml
+```
 
 ## License
 
