@@ -48,23 +48,50 @@ node_pruning_keep_recent: "100"
 node_pruning_keep_every: "0"
 node_pruning_interval: "10"
 
-# P2P configuration
+# =============================================================================
+# P2P Configuration
+# =============================================================================
 node_persistent_peers: ""
 node_private_peer_ids: ""
-node_pex_enabled: true  # false for validators
-node_addr_book_strict: true
+node_pex_enabled: true  # Legacy variable, use node_pex instead
+node_addr_book_strict: false  # false allows private IP connections
 node_max_num_inbound_peers: 40
 node_max_num_outbound_peers: 10
 
-# Validator-specific (for sentry nodes)
+# Validator-specific (for sentry nodes to list validator IDs)
 node_validator_node_ids: []
 
+# =============================================================================
+# Validator/Sentry Hermit Rules (cosmos-validator-and-sentry-rules.txt)
+# =============================================================================
+# These defaults are SAFE for validators (hermit mode).
+# Override in inventory for sentries with public-facing values.
+#
+# RULE: Validators are "hermits" - they only sign blocks, no public services
+# RULE: Sentries run public services and protect validators from DDoS
+
+# Network binding addresses
+# Validators: 127.0.0.1 (localhost only - hermit rule)
+# Sentries: 0.0.0.0 (public access) - override in inventory
+node_rpc_bind: "127.0.0.1"
+node_api_bind: "127.0.0.1"
+node_grpc_bind: "127.0.0.1"
+
+# Peer exchange (pex)
+# Validators: false (do not discover public peers)
+# Sentries: true (discover public peers) - override in inventory
+node_pex: false
+
 # API configuration
-node_api_enabled: true
+# Validators: false (hermit rule - no public services)
+# Sentries: true (public access) - override in inventory
+node_api_enabled: false
 node_api_swagger: false
 
 # gRPC configuration
-node_grpc_enabled: true
+# Validators: false (hermit rule - no public services)
+# Sentries: true (public access) - override in inventory
+node_grpc_enabled: false
 
 # Prometheus metrics
 node_prometheus_enabled: true

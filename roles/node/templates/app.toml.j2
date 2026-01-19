@@ -105,7 +105,9 @@ enable = {{ node_api_enabled | lower }}
 swagger = {{ node_api_swagger | lower }}
 
 # Address defines the API server to listen on.
-address = "tcp://0.0.0.0:{{ node_api_port }}"
+# Validators: 127.0.0.1 (localhost only - hermit rule)
+# Sentries: 0.0.0.0 (public access)
+address = "tcp://{{ node_api_bind | default('127.0.0.1') }}:{{ node_api_port }}"
 
 # MaxOpenConnections defines the number of maximum open connections.
 max-open-connections = 1000
@@ -129,10 +131,14 @@ enabled-unsafe-cors = false
 [grpc]
 
 # Enable defines if the gRPC server should be enabled.
+# Validators: false (hermit rule - no public services)
+# Sentries: true (public access)
 enable = {{ node_grpc_enabled | lower }}
 
 # Address defines the gRPC server address to bind to.
-address = "0.0.0.0:{{ node_grpc_port }}"
+# Validators: 127.0.0.1 (localhost only - hermit rule)
+# Sentries: 0.0.0.0 (public access)
+address = "{{ node_grpc_bind | default('127.0.0.1') }}:{{ node_grpc_port }}"
 
 # MaxRecvMsgSize defines the max message size in bytes the server can receive.
 max-recv-msg-size = "10485760"

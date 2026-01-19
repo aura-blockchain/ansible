@@ -34,7 +34,9 @@ log_format = "plain"
 [rpc]
 
 # TCP or UNIX socket address for the RPC server to listen on
-laddr = "tcp://0.0.0.0:{{ node_rpc_port }}"
+# Validators: 127.0.0.1 (localhost only - hermit rule)
+# Sentries: 0.0.0.0 (public access)
+laddr = "tcp://{{ node_rpc_bind | default('127.0.0.1') }}:{{ node_rpc_port }}"
 
 # A list of origins a cross-domain request can be executed from
 cors_allowed_origins = []
@@ -96,7 +98,9 @@ persistent_peers = "{{ node_persistent_peers }}"
 addr_book_file = "config/addrbook.json"
 
 # Set true for strict address routability rules
-addr_book_strict = {{ node_addr_book_strict | lower }}
+# Validators: false (allows connection to local/private IPs for sentry peering)
+# Sentries: false (allows connection to validators on private IPs)
+addr_book_strict = {{ node_addr_book_strict | default(false) | lower }}
 
 # Maximum number of inbound peers
 max_num_inbound_peers = {{ node_max_num_inbound_peers }}
@@ -115,7 +119,9 @@ handshake_timeout = "20s"
 dial_timeout = "3s"
 
 # Comma separated list of peer IDs to keep private (will not be gossiped to other peers)
-private_peer_ids = "{{ node_private_peer_ids }}"
+# Validators: empty (validators don't gossip)
+# Sentries: list all validator node IDs (protects validators from DDoS discovery)
+private_peer_ids = "{{ node_private_peer_ids | default('') }}"
 
 # Time to wait before flushing messages out on the connection
 flush_throttle_timeout = "100ms"
@@ -130,7 +136,9 @@ send_rate = 5120000
 recv_rate = 5120000
 
 # Set true to enable the peer-exchange reactor
-pex = {{ node_pex_enabled | lower }}
+# Validators: false (hermit rule - do not discover public peers)
+# Sentries: true (discover public peers to gossip blocks)
+pex = {{ node_pex | default(node_pex_enabled) | lower }}
 
 # Seed mode (node acts as a seed for peer discovery)
 seed_mode = false
