@@ -11,6 +11,9 @@
     backup: true
   become: true
   notify: Restart aurad service
+  tags:
+    - config
+    - config.toml
 
 - name: Deploy app.toml
   ansible.builtin.template:
@@ -22,6 +25,9 @@
     backup: true
   become: true
   notify: Restart aurad service
+  tags:
+    - config
+    - app.toml
 
 - name: Set private peer IDs for sentry nodes
   ansible.builtin.set_fact:
@@ -29,3 +35,5 @@
   when:
     - node_type == 'sentry'
     - node_validator_node_ids | length > 0
+  tags:
+    - config

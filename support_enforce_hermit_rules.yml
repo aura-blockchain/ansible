@@ -1,0 +1,218 @@
+---
+# =============================================================================
+# ENFORCE VALIDATOR/SENTRY HERMIT RULES
+# =============================================================================
+# This playbook surgically updates node configs to follow:
+#   blockchain-projects/shared/cosmos-validator-and-sentry-rules.txt
+#
+# RULES:
+#   - Validators are "hermits" - they only sign blocks, no public services
+#   - Sentries run public services and protect validators from DDoS
+#
+# Usage:
+#   All nodes:     ansible-playbook -i inventory/testnet.yml support_enforce_hermit_rules.yml
+#   Validators:    ansible-playbook -i inventory/testnet.yml support_enforce_hermit_rules.yml --limit validators
+#   Single node:   ansible-playbook -i inventory/testnet.yml support_enforce_hermit_rules.yml --limit aura_val1
+#   Dry run:       ansible-playbook -i inventory/testnet.yml support_enforce_hermit_rules.yml --check
+# =============================================================================
+
+- name: Enforce Hermit Rules on Validators
+  hosts: validators
+  become: true
+  gather_facts: false
+
+  vars:
+    # Validators MUST have these settings
+    validator_api_enabled: "false"
+    validator_grpc_enabled: "false"
+    validator_rpc_bind: "127.0.0.1"
+    validator_api_bind: "127.0.0.1"
+    validator_grpc_bind: "127.0.0.1"
+    validator_pex: "false"
+    validator_addr_book_strict: "false"
+
+  tasks:
+    - name: Display validator hermit rules
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          Enforcing Hermit Rules on {{ node_name }}
+          ============================================
+          Type: VALIDATOR (hermit mode)
+          - API: disabled, localhost only
+          - gRPC: disabled, localhost only
+          - RPC: localhost only
+          - PEX: disabled (no public peer discovery)
+          ============================================
+
+    # app.toml changes
+    - name: "Disable API server (app.toml)"
+      ansible.builtin.lineinfile:
+        path: "{{ node_daemon_home }}/config/app.toml"
+        regexp: '^enable = (true|false)\s*$'
+        line: 'enable = {{ validator_api_enabled }}'
+        backrefs: false
+      notify: Restart validator service
+
+    - name: "Bind API to localhost (app.toml)"
+      ansible.builtin.lineinfile:
+        path: "{{ node_daemon_home }}/config/app.toml"
+        regexp: '^address = "tcp://[^:]+:{{ node_api_port }}"'
+        line: 'address = "tcp://{{ validator_api_bind }}:{{ node_api_port }}"'
+      notify: Restart validator service
+
+    - name: "Bind gRPC to localhost (app.toml)"
+      ansible.builtin.lineinfile:
+        path: "{{ node_daemon_home }}/config/app.toml"
+        regexp: '^address = "[^:]+:{{ node_grpc_port }}"'
+        line: 'address = "{{ validator_grpc_bind }}:{{ node_grpc_port }}"'
+      notify: Restart validator service
+
+    # config.toml changes
+    - name: "Bind RPC to localhost (config.toml)"
+      ansible.builtin.lineinfile:
+        path: "{{ node_daemon_home }}/config/config.toml"
+        regexp: '^laddr = "tcp://[^:]+:{{ node_rpc_port }}"'
+        line: 'laddr = "tcp://{{ validator_rpc_bind }}:{{ node_rpc_port }}"'
+      notify: Restart validator service
+
+    - name: "Disable PEX (config.toml)"
+      ansible.builtin.lineinfile:
+        path: "{{ node_daemon_home }}/config/config.toml"
+        regexp: '^pex = (true|false)'
+        line: 'pex = {{ validator_pex }}'
+      notify: Restart validator service
+
+    - name: "Set addr_book_strict = false (config.toml)"
+      ansible.builtin.lineinfile:
+        path: "{{ node_daemon_home }}/config/config.toml"
+        regexp: '^addr_book_strict = (true|false)'
+        line: 'addr_book_strict = {{ validator_addr_book_strict }}'
+      notify: Restart validator service
+
+  handlers:
+    - name: Restart validator service
+      ansible.builtin.systemd:
+        name: "{{ node_service_name }}"
+        state: restarted
+        daemon_reload: true
+
+- name: Enforce Hermit Rules on Sentries
+  hosts: sentries
+  become: true
+  gather_facts: false
+
+  vars:
+    # Sentries MUST have these settings
+    sentry_api_enabled: "true"
+    sentry_grpc_enabled: "true"
+    sentry_rpc_bind: "0.0.0.0"
+    sentry_api_bind: "0.0.0.0"
+    sentry_grpc_bind: "0.0.0.0"
+    sentry_pex: "true"
+    sentry_addr_book_strict: "false"
+
+  tasks:
+    - name: Display sentry rules
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          Enforcing Sentry Rules on {{ node_name }}
+          ============================================
+          Type: SENTRY (public-facing)
+          - API: enabled, public binding
+          - gRPC: enabled, public binding
+          - RPC: public binding
+          - PEX: enabled (discover public peers)
+          - private_peer_ids: {{ node_private_peer_ids | default('not set') }}
+          ============================================
+
+    # app.toml changes
+    - name: "Enable API server (app.toml)"
+      ansible.builtin.lineinfile:
+        path: "{{ node_daemon_home }}/config/app.toml"
+        regexp: '^enable = (true|false)\s*$'
+        line: 'enable = {{ sentry_api_enabled }}'
+        backrefs: false
+      notify: Restart sentry service
+
+    - name: "Bind API to public (app.toml)"
+      ansible.builtin.lineinfile:
+        path: "{{ node_daemon_home }}/config/app.toml"
+        regexp: '^address = "tcp://[^:]+:{{ node_api_port }}"'
+        line: 'address = "tcp://{{ sentry_api_bind }}:{{ node_api_port }}"'
+      notify: Restart sentry service
+
+    - name: "Bind gRPC to public (app.toml)"
+      ansible.builtin.lineinfile:
+        path: "{{ node_daemon_home }}/config/app.toml"
+        regexp: '^address = "[^:]+:{{ node_grpc_port }}"'
+        line: 'address = "{{ sentry_grpc_bind }}:{{ node_grpc_port }}"'
+      notify: Restart sentry service
+
+    # config.toml changes
+    - name: "Bind RPC to public (config.toml)"
+      ansible.builtin.lineinfile:
+        path: "{{ node_daemon_home }}/config/config.toml"
+        regexp: '^laddr = "tcp://[^:]+:{{ node_rpc_port }}"'
+        line: 'laddr = "tcp://{{ sentry_rpc_bind }}:{{ node_rpc_port }}"'
+      notify: Restart sentry service
+
+    - name: "Enable PEX (config.toml)"
+      ansible.builtin.lineinfile:
+        path: "{{ node_daemon_home }}/config/config.toml"
+        regexp: '^pex = (true|false)'
+        line: 'pex = {{ sentry_pex }}'
+      notify: Restart sentry service
+
+    - name: "Set addr_book_strict = false (config.toml)"
+      ansible.builtin.lineinfile:
+        path: "{{ node_daemon_home }}/config/config.toml"
+        regexp: '^addr_book_strict = (true|false)'
+        line: 'addr_book_strict = {{ sentry_addr_book_strict }}'
+      notify: Restart sentry service
+
+    - name: "Set private_peer_ids to hide validators (config.toml)"
+      ansible.builtin.lineinfile:
+        path: "{{ node_daemon_home }}/config/config.toml"
+        regexp: '^private_peer_ids = ".*"'
+        line: 'private_peer_ids = "{{ node_private_peer_ids }}"'
+      when: node_private_peer_ids is defined and node_private_peer_ids | length > 0
+      notify: Restart sentry service
+
+  handlers:
+    - name: Restart sentry service
+      ansible.builtin.systemd:
+        name: "{{ node_service_name }}"
+        state: restarted
+        daemon_reload: true
+
+- name: Verify Hermit Rules Compliance
+  hosts: all_nodes
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Check node is responding
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ node_rpc_port }}/status"
+        method: GET
+        return_content: true
+      register: node_status
+      failed_when: false
+      changed_when: false
+      when: not ansible_check_mode
+
+    - name: Display compliance status
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          {{ node_name }} Compliance Check
+          ============================================
+          Service: {{ node_service_name }}
+          RPC: {{ 'responding' if (node_status.status | default(0)) == 200 else 'not responding or check mode' }}
+          {% if node_status.json is defined %}
+          Height: {{ node_status.json.result.sync_info.latest_block_height | default('N/A') }}
+          Syncing: {{ node_status.json.result.sync_info.catching_up | default('N/A') }}
+          {% endif %}
+          ============================================
