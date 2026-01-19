@@ -5,7 +5,18 @@
 all:
   children:
     # Validators group - all validator nodes
+    # RULE: Validators are "hermits" - they only sign blocks, no public services
     validators:
+      vars:
+        # Validators MUST have API/gRPC disabled or localhost-only
+        node_api_enabled: false
+        node_grpc_enabled: false
+        node_api_bind: "127.0.0.1"
+        node_grpc_bind: "127.0.0.1"
+        node_rpc_bind: "127.0.0.1"
+        # Validators MUST NOT discover public peers
+        node_pex: false
+        node_addr_book_strict: false
       hosts:
         aura_val1:
           ansible_host: 10.10.0.1
@@ -72,7 +83,20 @@ all:
           server: services-testnet
 
     # Sentries group - sentry nodes for DDoS protection
+    # RULE: Sentries run public services and protect validators from DDoS
     sentries:
+      vars:
+        # Sentries expose public RPC/API/gRPC
+        node_api_enabled: true
+        node_grpc_enabled: true
+        node_api_bind: "0.0.0.0"
+        node_grpc_bind: "0.0.0.0"
+        node_rpc_bind: "0.0.0.0"
+        # Sentries discover public peers
+        node_pex: true
+        node_addr_book_strict: false
+        # Sentries MUST hide validator IDs from public gossip
+        node_private_peer_ids: "5155823daf0b2864c4ed3e620f6b16dca129aa50,a4bf2031fa676d80f8057bd19515ade97ae844eb,f3695a1b267b333eb809a917654031b39e54e5f4,0b3f569b192537b7dc80c539c6265659883a5244"
       hosts:
         aura_sentry1:
           ansible_host: 10.10.0.1
