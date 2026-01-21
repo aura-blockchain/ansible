@@ -153,9 +153,11 @@ echo "Checking variable naming conventions..."
 NAMING_ISSUES=0
 
 # Check for node_chain_id vs chain_id inconsistency
-if grep -rq "node_chain_id" "${ANSIBLE_ROOT}/group_vars/" 2>/dev/null; then
-    if grep -rq "^chain_id:" "${ANSIBLE_ROOT}/group_vars/" 2>/dev/null; then
-        log_warning "Both 'node_chain_id' and 'chain_id' used in group_vars - use consistent naming"
+# It's OK if node_chain_id REFERENCES chain_id (e.g., node_chain_id: "{{ chain_id }}")
+# It's NOT OK if both are hardcoded with values
+if grep -rq "node_chain_id.*['\"]aura-" "${ANSIBLE_ROOT}/group_vars/" 2>/dev/null | grep -qv "{{"; then
+    if grep -rq "^chain_id.*['\"]aura-" "${ANSIBLE_ROOT}/group_vars/" 2>/dev/null | grep -qv "{{"; then
+        log_warning "Both 'node_chain_id' and 'chain_id' hardcoded in group_vars - one should reference the other"
         ((NAMING_ISSUES++))
     fi
 fi
