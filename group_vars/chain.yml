@@ -1,0 +1,90 @@
+---
+# =============================================================================
+# AURA CHAIN CONFIGURATION - SINGLE SOURCE OF TRUTH
+# =============================================================================
+# This file defines chain-level constants that MUST NOT be duplicated elsewhere.
+# All other files should reference these variables, not define their own copies.
+#
+# USAGE:
+#   - In Ansible playbooks/roles: Use variables directly (e.g., {{ chain_id }})
+#   - In GitHub Actions: Source from aura-ansible or use workflow_call
+#   - In scripts: Source aura-ansible/scripts/chain-vars.sh
+#
+# ADDING NEW VARIABLES:
+#   1. Add the variable here with clear documentation
+#   2. Remove duplicates from other files
+#   3. Run scripts/validate-config.sh to verify consistency
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Chain Identity (CANONICAL - DO NOT DUPLICATE)
+# -----------------------------------------------------------------------------
+chain_id: "aura-mvp-1"
+chain_name: "AURA"
+chain_bech32_prefix: "aura"
+chain_staking_denom: "uaura"
+chain_denom_coefficient: 1000000
+chain_minimum_gas_prices: "0.025uaura"
+
+# -----------------------------------------------------------------------------
+# Daemon Configuration (CANONICAL - DO NOT DUPLICATE)
+# -----------------------------------------------------------------------------
+daemon_name: "aurad"
+daemon_user: "ubuntu"
+daemon_group: "ubuntu"
+
+# -----------------------------------------------------------------------------
+# Version Pinning (CANONICAL - DO NOT DUPLICATE)
+# Update these when upgrading software versions
+# -----------------------------------------------------------------------------
+go_version: "1.23.0"
+cosmovisor_version: "v1.5.0"
+node_exporter_version: "1.7.0"
+prometheus_version: "2.48.0"
+alertmanager_version: "0.26.0"
+loki_version: "2.9.3"
+tenderduty_version: "v2.2.1"
+cosmos_exporter_version: "0.3.0"
+
+# -----------------------------------------------------------------------------
+# Artifact URLs (CANONICAL - DO NOT DUPLICATE)
+# -----------------------------------------------------------------------------
+genesis_url: "https://artifacts.aurablockchain.org/{{ chain_id }}/genesis.json"
+peers_url: "https://artifacts.aurablockchain.org/{{ chain_id }}/peers.txt"
+
+# -----------------------------------------------------------------------------
+# Standard Ports (CANONICAL DEFAULTS - Override per-host in inventory)
+# These are the Cosmos SDK standard ports. Individual nodes override in inventory.
+# -----------------------------------------------------------------------------
+ports:
+  rpc: 26657
+  p2p: 26656
+  grpc: 9090
+  api: 1317
+  pprof: 6060
+  prometheus: 26660
+  node_exporter: 9100
+  cosmos_exporter: 9300
+  alertmanager: 9093
+  grafana: 3000
+  tenderduty: 8888
+
+# -----------------------------------------------------------------------------
+# VPN Configuration (CANONICAL - DO NOT DUPLICATE)
+# -----------------------------------------------------------------------------
+vpn_network: "10.10.0.0/24"
+
+# -----------------------------------------------------------------------------
+# Security Defaults (CANONICAL - DO NOT DUPLICATE)
+# -----------------------------------------------------------------------------
+ssh_port: 22
+ufw_default_incoming: "deny"
+ufw_default_outgoing: "allow"
+
+# -----------------------------------------------------------------------------
+# Service Configuration (CANONICAL - DO NOT DUPLICATE)
+# -----------------------------------------------------------------------------
+cosmovisor_allow_download_binaries: false
+cosmovisor_restart_after_upgrade: true
+prometheus_scrape_interval: "15s"
+snapshot_retention_days: 7

@@ -1,9 +1,11 @@
 ---
 # Default variables for monitoring role
+#
+# IMPORTANT: Chain-level constants are defined in group_vars/chain.yml
 # Note: node_exporter variables are in the node_exporter role defaults
 
-monitoring_prometheus_version: "2.48.0"
-monitoring_prometheus_port: 9090
-monitoring_prometheus_scrape_interval: 15s
+monitoring_prometheus_version: "{{ prometheus_version | default('2.48.0') }}"
+monitoring_prometheus_port: "{{ ports.prometheus | default(9090) }}"
+monitoring_prometheus_scrape_interval: "{{ prometheus_scrape_interval | default('15s') }}"
 
 monitoring_install_prometheus: false

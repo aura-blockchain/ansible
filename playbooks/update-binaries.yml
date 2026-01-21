@@ -1,0 +1,321 @@
+---
+# =============================================================================
+# AURA BINARY UPDATE PLAYBOOK
+# =============================================================================
+# Supports two deployment modes:
+#
+# 1. TARBALL/BINARY MODE (CI/CD):
+#    Uses a pre-built binary. Pass binary_path as extra var.
+#    ansible-playbook -i inventory/testnet.yml playbooks/update-binaries.yml \
+#      -e "binary_path=/path/to/aurad" -e "deploy_mode=binary"
+#
+# 2. GIT MODE (Manual):
+#    Clones the repo and builds from source.
+#    ansible-playbook -i inventory/testnet.yml playbooks/update-binaries.yml \
+#      -e "deploy_mode=git" -e "git_ref=main"
+#
+# Common options:
+#   -e "rolling_update=true"   - Update nodes one at a time (default: true)
+#   -e "backup_binary=true"    - Backup existing binary before update
+#   -e "health_check=true"     - Run health checks after update
+#   --limit validators         - Only update validator nodes
+#   --limit sentries           - Only update sentry nodes
+# =============================================================================
+
+- name: Update AURA Binaries
+  hosts: all_nodes
+  become: true
+  serial: "{{ '1' if rolling_update | default(true) | bool else '100%' }}"
+  gather_facts: true
+
+  vars:
+    # Deployment mode: 'binary' (CI/CD) or 'git' (manual)
+    deploy_mode: "{{ deploy_mode | default('binary') }}"
+
+    # Binary mode settings
+    binary_path: "{{ binary_path | default('') }}"
+    binary_name: "{{ binary_name | default(daemon_name | default('aurad')) }}"
+
+    # Git mode settings
+    git_repo: "{{ git_repo | default('https://github.com/aura-blockchain/aura.git') }}"
+    git_ref: "{{ git_ref | default('main') }}"
+    build_dir: "/tmp/aura-build-{{ ansible_date_time.epoch }}"
+
+    # Common settings
+    backup_binary: "{{ backup_binary | default(true) | bool }}"
+    health_check: "{{ health_check | default(true) | bool }}"
+    backup_dir: "/tmp/aurad-backup-{{ ansible_date_time.epoch }}"
+
+    # Destination path (uses chain.yml variables)
+    binary_dest: "{{ node_daemon_home }}/cosmovisor/genesis/bin/{{ daemon_name | default('aurad') }}"
+
+  pre_tasks:
+    - name: Display deployment info
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          AURA Binary Update
+          ============================================
+          Mode: {{ deploy_mode }}
+          Target: {{ inventory_hostname }}
+          Node: {{ node_name | default('unknown') }}
+          {% if deploy_mode == 'binary' %}
+          Binary path: {{ binary_path }}
+          {% else %}
+          Git repo: {{ git_repo }}
+          Git ref: {{ git_ref }}
+          {% endif %}
+          Backup: {{ backup_binary }}
+          Health check: {{ health_check }}
+          ============================================
+
+    - name: Validate deployment mode
+      ansible.builtin.fail:
+        msg: "deploy_mode must be 'binary' or 'git', got: {{ deploy_mode }}"
+      when: deploy_mode not in ['binary', 'git']
+
+    - name: Validate binary path for binary mode
+      ansible.builtin.fail:
+        msg: "binary_path must be set when deploy_mode is 'binary'"
+      when:
+        - deploy_mode == 'binary'
+        - binary_path | length == 0
+
+  tasks:
+    # =========================================================================
+    # BACKUP EXISTING BINARY
+    # =========================================================================
+    - name: Create backup directory
+      ansible.builtin.file:
+        path: "{{ backup_dir }}"
+        state: directory
+        mode: '0755'
+      when: backup_binary
+
+    - name: Check if existing binary exists
+      ansible.builtin.stat:
+        path: "{{ binary_dest }}"
+      register: existing_binary
+
+    - name: Backup existing binary
+      ansible.builtin.copy:
+        src: "{{ binary_dest }}"
+        dest: "{{ backup_dir }}/{{ binary_name }}-{{ node_name }}.backup"
+        remote_src: true
+        mode: '0755'
+      when:
+        - backup_binary
+        - existing_binary.stat.exists
+
+    - name: Get current binary version
+      ansible.builtin.command: "{{ binary_dest }} version"
+      register: old_version
+      changed_when: false
+      failed_when: false
+      when: existing_binary.stat.exists
+
+    # =========================================================================
+    # STOP SERVICE
+    # =========================================================================
+    - name: Stop node service
+      ansible.builtin.systemd:
+        name: "{{ node_service_name }}"
+        state: stopped
+      register: stop_result
+
+    - name: Wait for service to fully stop
+      ansible.builtin.pause:
+        seconds: 5
+
+    # =========================================================================
+    # BINARY MODE: COPY PRE-BUILT BINARY
+    # =========================================================================
+    - name: Copy binary from local path (binary mode)
+      ansible.builtin.copy:
+        src: "{{ binary_path }}"
+        dest: "{{ binary_dest }}"
+        owner: "{{ daemon_user | default('ubuntu') }}"
+        group: "{{ daemon_group | default('ubuntu') }}"
+        mode: '0755'
+      when: deploy_mode == 'binary'
+
+    # =========================================================================
+    # GIT MODE: CLONE AND BUILD
+    # =========================================================================
+    - name: Git mode - Create build directory
+      ansible.builtin.file:
+        path: "{{ build_dir }}"
+        state: directory
+        mode: '0755'
+      when: deploy_mode == 'git'
+
+    - name: Git mode - Clone repository
+      ansible.builtin.git:
+        repo: "{{ git_repo }}"
+        dest: "{{ build_dir }}"
+        version: "{{ git_ref }}"
+        depth: 1
+        force: true
+      when: deploy_mode == 'git'
+
+    - name: Git mode - Build binary
+      ansible.builtin.shell: |
+        cd {{ build_dir }}/chain
+        export PATH=$PATH:/usr/local/go/bin
+        go build -o {{ binary_name }} ./cmd/aurad
+      args:
+        creates: "{{ build_dir }}/chain/{{ binary_name }}"
+      environment:
+        GOPATH: "/home/{{ daemon_user | default('ubuntu') }}/go"
+        GOCACHE: "/home/{{ daemon_user | default('ubuntu') }}/.cache/go-build"
+        CGO_ENABLED: "0"
+      when: deploy_mode == 'git'
+
+    - name: Git mode - Copy built binary to destination
+      ansible.builtin.copy:
+        src: "{{ build_dir }}/chain/{{ binary_name }}"
+        dest: "{{ binary_dest }}"
+        owner: "{{ daemon_user | default('ubuntu') }}"
+        group: "{{ daemon_group | default('ubuntu') }}"
+        mode: '0755'
+        remote_src: true
+      when: deploy_mode == 'git'
+
+    - name: Git mode - Cleanup build directory
+      ansible.builtin.file:
+        path: "{{ build_dir }}"
+        state: absent
+      when: deploy_mode == 'git'
+
+    # =========================================================================
+    # VERIFY AND START
+    # =========================================================================
+    - name: Verify new binary is executable
+      ansible.builtin.command: "{{ binary_dest }} version"
+      register: new_version
+      changed_when: false
+
+    - name: Display version change
+      ansible.builtin.debug:
+        msg: |
+          Binary updated on {{ inventory_hostname }}:
+          - Old version: {{ old_version.stdout | default('N/A') }}
+          - New version: {{ new_version.stdout }}
+
+    - name: Start node service
+      ansible.builtin.systemd:
+        name: "{{ node_service_name }}"
+        state: started
+        daemon_reload: true
+
+    - name: Wait for node to be responsive
+      ansible.builtin.wait_for:
+        port: "{{ node_p2p_port }}"
+        host: 127.0.0.1
+        delay: 5
+        timeout: 60
+      ignore_errors: true
+
+    # =========================================================================
+    # HEALTH CHECK
+    # =========================================================================
+    - name: Health check - Wait for RPC to respond
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ node_rpc_port }}/status"
+        method: GET
+        return_content: true
+      register: health_check_result
+      retries: 12
+      delay: 10
+      until: health_check_result.status == 200
+      when: health_check
+      failed_when: false
+
+    - name: Health check - Display status
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          Health Check: {{ inventory_hostname }}
+          ============================================
+          RPC Status: {{ 'OK' if health_check_result.status == 200 else 'FAILED' }}
+          {% if health_check_result.json is defined %}
+          Height: {{ health_check_result.json.result.sync_info.latest_block_height | default('N/A') }}
+          Syncing: {{ health_check_result.json.result.sync_info.catching_up | default('N/A') }}
+          {% endif %}
+          ============================================
+      when: health_check
+
+    # =========================================================================
+    # ROLLBACK ON FAILURE (if health check fails)
+    # =========================================================================
+    - name: Rollback - Check if health check failed
+      ansible.builtin.set_fact:
+        needs_rollback: "{{ health_check and health_check_result.status != 200 and backup_binary and existing_binary.stat.exists }}"
+
+    - name: Rollback - Stop service for rollback
+      ansible.builtin.systemd:
+        name: "{{ node_service_name }}"
+        state: stopped
+      when: needs_rollback | default(false)
+
+    - name: Rollback - Restore backup binary
+      ansible.builtin.copy:
+        src: "{{ backup_dir }}/{{ binary_name }}-{{ node_name }}.backup"
+        dest: "{{ binary_dest }}"
+        remote_src: true
+        mode: '0755'
+      when: needs_rollback | default(false)
+
+    - name: Rollback - Restart with old binary
+      ansible.builtin.systemd:
+        name: "{{ node_service_name }}"
+        state: started
+      when: needs_rollback | default(false)
+
+    - name: Rollback - Report rollback
+      ansible.builtin.debug:
+        msg: |
+          !! ROLLBACK PERFORMED !!
+          Node {{ inventory_hostname }} failed health check.
+          Restored previous binary version.
+      when: needs_rollback | default(false)
+
+  post_tasks:
+    - name: Cleanup old backups (keep last 3)
+      ansible.builtin.shell: |
+        ls -dt /tmp/aurad-backup-* 2>/dev/null | tail -n +4 | xargs rm -rf
+      changed_when: false
+      failed_when: false
+
+# =============================================================================
+# FINAL VERIFICATION
+# =============================================================================
+- name: Verify Deployment
+  hosts: all_nodes
+  gather_facts: false
+
+  tasks:
+    - name: Wait for chain to stabilize
+      ansible.builtin.pause:
+        seconds: 30
+
+    - name: Final health check
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ node_rpc_port }}/status"
+        method: GET
+        return_content: true
+      register: final_status
+      failed_when: false
+
+    - name: Display final status
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          Deployment Complete: {{ inventory_hostname }}
+          ============================================
+          RPC: {{ 'OK' if final_status.status == 200 else 'NOT RESPONDING' }}
+          {% if final_status.json is defined %}
+          Height: {{ final_status.json.result.sync_info.latest_block_height | default('N/A') }}
+          Catching up: {{ final_status.json.result.sync_info.catching_up | default('N/A') }}
+          {% endif %}
+          ============================================

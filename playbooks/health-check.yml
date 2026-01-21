@@ -1,0 +1,206 @@
+---
+# =============================================================================
+# AURA HEALTH CHECK PLAYBOOK
+# =============================================================================
+# Runs comprehensive health checks on all AURA nodes.
+#
+# Usage:
+#   ansible-playbook -i inventory/testnet.yml playbooks/health-check.yml
+#   ansible-playbook -i inventory/testnet.yml playbooks/health-check.yml --limit validators
+#
+# Options:
+#   -e "fail_on_error=true"  - Fail playbook if any check fails (default: false)
+#   -e "check_peers=true"    - Check peer connectivity
+#   -e "check_sync=true"     - Check sync status
+# =============================================================================
+
+- name: AURA Health Check
+  hosts: all_nodes
+  gather_facts: true
+
+  vars:
+    fail_on_error: "{{ fail_on_error | default(false) | bool }}"
+    check_peers: "{{ check_peers | default(true) | bool }}"
+    check_sync: "{{ check_sync | default(true) | bool }}"
+    min_peers: 2
+    max_block_lag: 10
+
+  tasks:
+    # =========================================================================
+    # SERVICE CHECKS
+    # =========================================================================
+    - name: Check node service status
+      ansible.builtin.systemd:
+        name: "{{ node_service_name }}"
+      register: service_status
+      failed_when: false
+
+    - name: Set service health
+      ansible.builtin.set_fact:
+        service_healthy: "{{ service_status.status.ActiveState == 'active' }}"
+
+    # =========================================================================
+    # RPC CHECKS
+    # =========================================================================
+    - name: Check RPC endpoint
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ node_rpc_port }}/status"
+        method: GET
+        return_content: true
+        timeout: 10
+      register: rpc_status
+      failed_when: false
+
+    - name: Set RPC health
+      ansible.builtin.set_fact:
+        rpc_healthy: "{{ rpc_status.status == 200 }}"
+        node_height: "{{ rpc_status.json.result.sync_info.latest_block_height | default(0) | int }}"
+        node_catching_up: "{{ rpc_status.json.result.sync_info.catching_up | default(true) }}"
+        node_latest_block_time: "{{ rpc_status.json.result.sync_info.latest_block_time | default('unknown') }}"
+      when: rpc_status.status == 200
+
+    - name: Set RPC unhealthy defaults
+      ansible.builtin.set_fact:
+        rpc_healthy: false
+        node_height: 0
+        node_catching_up: true
+        node_latest_block_time: "unknown"
+      when: rpc_status.status != 200
+
+    # =========================================================================
+    # PEER CHECKS
+    # =========================================================================
+    - name: Check peer count
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ node_rpc_port }}/net_info"
+        method: GET
+        return_content: true
+        timeout: 10
+      register: net_info
+      failed_when: false
+      when: check_peers
+
+    - name: Set peer health
+      ansible.builtin.set_fact:
+        peer_count: "{{ net_info.json.result.n_peers | default(0) | int }}"
+        peers_healthy: "{{ (net_info.json.result.n_peers | default(0) | int) >= min_peers }}"
+      when: check_peers and net_info.status == 200
+
+    - name: Set peer unhealthy defaults
+      ansible.builtin.set_fact:
+        peer_count: 0
+        peers_healthy: false
+      when: check_peers and (net_info.status | default(0)) != 200
+
+    # =========================================================================
+    # SYNC CHECK (compare with other nodes)
+    # =========================================================================
+    - name: Collect heights from all nodes
+      ansible.builtin.set_fact:
+        all_heights: "{{ all_heights | default({}) | combine({inventory_hostname: node_height}) }}"
+
+    - name: Calculate max height across cluster
+      ansible.builtin.set_fact:
+        max_cluster_height: "{{ hostvars | dict2items | map(attribute='value.node_height') | select('defined') | max | default(0) | int }}"
+      run_once: true
+
+    - name: Check sync lag
+      ansible.builtin.set_fact:
+        sync_lag: "{{ (max_cluster_height | int) - (node_height | int) }}"
+        sync_healthy: "{{ ((max_cluster_height | int) - (node_height | int)) <= max_block_lag }}"
+      when: check_sync
+
+    # =========================================================================
+    # RESOURCE CHECKS
+    # =========================================================================
+    - name: Check disk space
+      ansible.builtin.shell: df -h {{ node_daemon_home }} | tail -1 | awk '{print $5}' | sed 's/%//'
+      register: disk_usage
+      changed_when: false
+      failed_when: false
+
+    - name: Set disk health
+      ansible.builtin.set_fact:
+        disk_usage_pct: "{{ disk_usage.stdout | default(0) | int }}"
+        disk_healthy: "{{ (disk_usage.stdout | default(0) | int) < 90 }}"
+
+    # =========================================================================
+    # SUMMARY
+    # =========================================================================
+    - name: Calculate overall health
+      ansible.builtin.set_fact:
+        overall_healthy: >-
+          {{
+            service_healthy and
+            rpc_healthy and
+            (peers_healthy | default(true)) and
+            (sync_healthy | default(true)) and
+            disk_healthy
+          }}
+
+    - name: Display health status
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          Health Check: {{ inventory_hostname }} ({{ node_name }})
+          ============================================
+          Overall: {{ '✓ HEALTHY' if overall_healthy else '✗ UNHEALTHY' }}
+
+          Service:
+            Status: {{ '✓' if service_healthy else '✗' }} {{ service_status.status.ActiveState | default('unknown') }}
+
+          RPC:
+            Status: {{ '✓' if rpc_healthy else '✗' }} {{ 'responding' if rpc_healthy else 'not responding' }}
+            Height: {{ node_height }}
+            Catching up: {{ node_catching_up }}
+            Last block: {{ node_latest_block_time }}
+
+          {% if check_peers %}
+          Peers:
+            Status: {{ '✓' if peers_healthy else '✗' }} {{ peer_count }} peers (min: {{ min_peers }})
+          {% endif %}
+
+          {% if check_sync %}
+          Sync:
+            Status: {{ '✓' if sync_healthy else '✗' }} lag {{ sync_lag | default(0) }} blocks (max: {{ max_block_lag }})
+            Cluster max height: {{ max_cluster_height }}
+          {% endif %}
+
+          Disk:
+            Status: {{ '✓' if disk_healthy else '✗' }} {{ disk_usage_pct }}% used
+          ============================================
+
+    - name: Fail if unhealthy and fail_on_error is set
+      ansible.builtin.fail:
+        msg: "Node {{ inventory_hostname }} failed health check"
+      when:
+        - fail_on_error
+        - not overall_healthy
+
+# =============================================================================
+# CLUSTER SUMMARY
+# =============================================================================
+- name: Cluster Health Summary
+  hosts: localhost
+  gather_facts: false
+  run_once: true
+
+  tasks:
+    - name: Collect health status from all nodes
+      ansible.builtin.set_fact:
+        healthy_nodes: "{{ groups['all_nodes'] | map('extract', hostvars) | selectattr('overall_healthy', 'defined') | selectattr('overall_healthy', 'equalto', true) | list | length }}"
+        total_nodes: "{{ groups['all_nodes'] | length }}"
+
+    - name: Display cluster summary
+      ansible.builtin.debug:
+        msg: |
+          ============================================
+          CLUSTER HEALTH SUMMARY
+          ============================================
+          Healthy nodes: {{ healthy_nodes }}/{{ total_nodes }}
+          {% if healthy_nodes == total_nodes %}
+          Status: ✓ ALL NODES HEALTHY
+          {% else %}
+          Status: ✗ SOME NODES UNHEALTHY
+          {% endif %}
+          ============================================

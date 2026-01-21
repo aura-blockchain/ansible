@@ -1,29 +1,35 @@
 ---
 # Global variables for AURA testnet infrastructure
 # AURA Blockchain - Ansible group_vars
+#
+# IMPORTANT: Chain-level constants are defined in group_vars/chain.yml
+# This file maps those canonical values to role-specific variable names.
+# =============================================================================
 
 # =============================================================================
-# Chain Configuration (used by node role)
+# Chain Configuration Mappings
+# These map canonical chain.yml values to role-specific variable names
+# DO NOT hardcode values here - reference chain.yml variables instead
 # =============================================================================
-node_chain_name: "AURA"
-node_chain_id: "aura-mvp-1"
-node_daemon_name: "aurad"
-node_daemon_user: "ubuntu"
-node_bech_prefix: "aura"
-node_staking_denom: "uaura"
-node_denom_coefficient: 1000000
+node_chain_name: "{{ chain_name }}"
+node_chain_id: "{{ chain_id }}"
+node_daemon_name: "{{ daemon_name }}"
+node_daemon_user: "{{ daemon_user }}"
+node_bech_prefix: "{{ chain_bech32_prefix }}"
+node_staking_denom: "{{ chain_staking_denom }}"
+node_denom_coefficient: "{{ chain_denom_coefficient }}"
 
 # =============================================================================
-# Version Variables (prefixed by role)
+# Version Mappings (reference chain.yml)
 # =============================================================================
-node_go_version: "1.23.0"
-node_cosmovisor_version: "v1.5.0"
-tenderduty_version: "v2.2.1"
-cosmos_exporter_version: "0.3.0"
-node_exporter_version: "1.7.0"
-monitoring_prometheus_version: "2.48.0"
-monitoring_alertmanager_version: "0.26.0"
-monitoring_loki_version: "2.9.3"
+node_go_version: "{{ go_version }}"
+node_cosmovisor_version: "{{ cosmovisor_version }}"
+tenderduty_version: "{{ tenderduty_version }}"
+cosmos_exporter_version: "{{ cosmos_exporter_version }}"
+node_exporter_version: "{{ node_exporter_version }}"
+monitoring_prometheus_version: "{{ prometheus_version }}"
+monitoring_alertmanager_version: "{{ alertmanager_version }}"
+monitoring_loki_version: "{{ loki_version }}"
 
 # =============================================================================
 # Directory Variables
@@ -34,20 +40,20 @@ node_log_dir: "/var/log/aura"
 node_go_install_path: /usr/local/go
 
 # =============================================================================
-# Network URLs (used by node role)
+# Network URLs (reference chain.yml)
 # =============================================================================
-node_genesis_url: "https://artifacts.aurablockchain.org/aura-mvp-1/genesis.json"
-node_peers_url: "https://artifacts.aurablockchain.org/aura-mvp-1/peers.txt"
+node_genesis_url: "{{ genesis_url }}"
+node_peers_url: "{{ peers_url }}"
 
 # =============================================================================
-# Monitoring Ports (prefixed by role)
+# Monitoring Ports (reference chain.yml ports object)
 # =============================================================================
-node_exporter_port: 9100
-monitoring_prometheus_port: 9090
-monitoring_alertmanager_port: 9093
-cosmos_exporter_port: 9300
-tenderduty_port: 8888
-monitoring_grafana_port: 3000
+node_exporter_port: "{{ ports.node_exporter }}"
+monitoring_prometheus_port: "{{ ports.prometheus }}"
+monitoring_alertmanager_port: "{{ ports.alertmanager }}"
+cosmos_exporter_port: "{{ ports.cosmos_exporter }}"
+tenderduty_port: "{{ ports.tenderduty }}"
+monitoring_grafana_port: "{{ ports.grafana }}"
 
 # =============================================================================
 # Security (used by common role)
@@ -132,11 +138,11 @@ security_maintenance_reminder_day: 1
 security_update_check: weekly
 
 # =============================================================================
-# VPN Network for monitoring access (used by multiple roles)
+# VPN Network for monitoring access (reference chain.yml)
 # =============================================================================
-node_exporter_vpn_network: "10.10.0.0/24"
-cosmos_exporter_vpn_network: "10.10.0.0/24"
-tenderduty_vpn_network: "10.10.0.0/24"
+node_exporter_vpn_network: "{{ vpn_network }}"
+cosmos_exporter_vpn_network: "{{ vpn_network }}"
+tenderduty_vpn_network: "{{ vpn_network }}"
 
 # =============================================================================
 # Node configuration

@@ -1,15 +1,17 @@
 ---
 # Default variables for nginx_configs role
+#
+# IMPORTANT: Chain-level constants are defined in group_vars/chain.yml
 
 # Enable/disable the role
 nginx_configs_enabled: true
 
-# Backend service ports
+# Backend service ports (references chain.yml ports object)
 nginx_configs_explorer_backend_port: 8082
 nginx_configs_faucet_backend_port: 8081
-nginx_configs_rpc_port: 26657
-nginx_configs_rest_port: 1317
-nginx_configs_grpc_port: 9090
+nginx_configs_rpc_port: "{{ ports.rpc | default(26657) }}"
+nginx_configs_rest_port: "{{ ports.api | default(1317) }}"
+nginx_configs_grpc_port: "{{ ports.grpc | default(9090) }}"
 
 # SSL configuration
 nginx_configs_ssl_enabled: true

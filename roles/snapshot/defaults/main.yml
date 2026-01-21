@@ -1,21 +1,24 @@
 ---
 # Default variables for snapshot role
+#
+# IMPORTANT: Chain-level constants are defined in group_vars/chain.yml
+# These defaults reference chain.yml values where appropriate.
 
 # Disable snapshots by default
 snapshot_enabled: false
 
 # Snapshot storage
 snapshot_dir: /var/backups/aura
-snapshot_retention_days: 7
+snapshot_retention_days: "{{ snapshot_retention_days | default(7) }}"
 
 # Cron schedule (default: daily at midnight UTC)
 snapshot_cron_minute: '0'
 snapshot_cron_hour: '0'
 
-# AURA node settings
+# AURA node settings (references chain.yml)
 snapshot_aura_home: '~/.aura-mvp-val1'
 snapshot_aura_service: 'aurad-mvp-val1'
-snapshot_chain_id: 'aura-mvp-1'
+snapshot_chain_id: "{{ chain_id | default('aura-mvp-1') }}"
 
 # R2 upload settings (optional)
 snapshot_r2_upload_enabled: false

@@ -1,13 +1,16 @@
 ---
 # Default variables for tenderduty role
+#
+# IMPORTANT: Chain-level constants are defined in group_vars/chain.yml
+# These defaults reference chain.yml values where appropriate.
 
 # Build from source settings
-tenderduty_version: 'v2.2.1'
+tenderduty_version: "{{ tenderduty_version | default('v2.2.1') }}"
 tenderduty_repo: 'https://github.com/blockpane/tenderduty.git'
 tenderduty_build_dir: '/tmp/tenderduty-build'
 tenderduty_install_dir: '/opt/tenderduty'
 
-tenderduty_port: 8888
+tenderduty_port: "{{ ports.tenderduty | default(8888) }}"
 
 # Alert settings
 tenderduty_alert_if_no_servers: true
@@ -31,10 +34,10 @@ tenderduty_slack_webhook: ''
 tenderduty_pagerduty_enabled: false
 tenderduty_pagerduty_key: ''
 
-# Chain-specific settings
-tenderduty_chain_id: 'aura-mvp-1'
-tenderduty_chain_name: 'AURA'
-tenderduty_tendermint_rpc: 'http://localhost:26657'
+# Chain-specific settings (references chain.yml)
+tenderduty_chain_id: "{{ chain_id | default('aura-mvp-1') }}"
+tenderduty_chain_name: "{{ chain_name | default('AURA') }}"
+tenderduty_tendermint_rpc: "http://localhost:{{ ports.rpc | default(26657) }}"
 
 # Multiple validators configuration
 # Each validator has: name, valoper_address, rpc_url
@@ -53,4 +56,5 @@ tenderduty_validators:
 tenderduty_validator_address: ''
 tenderduty_valoper_address: ''
 
-tenderduty_vpn_network: '10.10.0.0/24'
+# Network configuration (references chain.yml)
+tenderduty_vpn_network: "{{ vpn_network | default('10.10.0.0/24') }}"

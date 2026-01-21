@@ -1,16 +1,22 @@
 ---
 # Default variables for cosmos_exporter role
+#
+# IMPORTANT: Chain-level constants are defined in group_vars/chain.yml
+# These defaults reference chain.yml values where appropriate.
 
-cosmos_exporter_version: '0.3.0'
-cosmos_exporter_port: 9300
+cosmos_exporter_version: "{{ cosmos_exporter_version | default('0.3.0') }}"
+cosmos_exporter_port: "{{ ports.cosmos_exporter | default(9300) }}"
+
 # Use node_rpc_port and node_grpc_port from inventory if defined
-cosmos_exporter_tendermint_rpc: "http://localhost:{{ node_rpc_port | default(26657) }}"
-cosmos_exporter_node: "tcp://localhost:{{ node_grpc_port | default(9090) }}"
-cosmos_exporter_log_denom: 'uaura'
-cosmos_exporter_denom: 'aura'
-cosmos_exporter_denom_coefficient: '1000000'
-cosmos_exporter_bech_prefix: 'aura'
-cosmos_exporter_vpn_network: '10.10.0.0/24'
+cosmos_exporter_tendermint_rpc: "http://localhost:{{ node_rpc_port | default(ports.rpc | default(26657)) }}"
+cosmos_exporter_node: "tcp://localhost:{{ node_grpc_port | default(ports.grpc | default(9090)) }}"
 
-# Chain-specific settings
-cosmos_exporter_chain_id: 'aura-mvp-1'
+# Chain configuration (references chain.yml)
+cosmos_exporter_log_denom: "{{ chain_staking_denom | default('uaura') }}"
+cosmos_exporter_denom: "{{ chain_bech32_prefix | default('aura') }}"
+cosmos_exporter_denom_coefficient: "{{ chain_denom_coefficient | default(1000000) }}"
+cosmos_exporter_bech_prefix: "{{ chain_bech32_prefix | default('aura') }}"
+cosmos_exporter_chain_id: "{{ chain_id | default('aura-mvp-1') }}"
+
+# Network configuration (references chain.yml)
+cosmos_exporter_vpn_network: "{{ vpn_network | default('10.10.0.0/24') }}"

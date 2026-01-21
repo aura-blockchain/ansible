@@ -32,12 +32,12 @@ nginx_manage_vhosts: true
 nginx_domain: "aurablockchain.org"
 
 # -----------------------------------------------------------------------------
-# Backend Port Configuration
+# Backend Port Configuration (references chain.yml ports object)
 # -----------------------------------------------------------------------------
-nginx_rpc_port: 26657
-nginx_rest_port: 1317
-nginx_grpc_port: 9090
-nginx_ws_port: 26657
+nginx_rpc_port: "{{ ports.rpc | default(26657) }}"
+nginx_rest_port: "{{ ports.api | default(1317) }}"
+nginx_grpc_port: "{{ ports.grpc | default(9090) }}"
+nginx_ws_port: "{{ ports.rpc | default(26657) }}"
 nginx_explorer_port: 8082
 nginx_faucet_port: 8081
 

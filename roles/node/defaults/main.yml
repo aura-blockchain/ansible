@@ -1,38 +1,42 @@
 ---
 # AURA Node Role - Default Variables
+#
+# IMPORTANT: Chain-level constants are defined in group_vars/chain.yml
+# These defaults reference chain.yml values where appropriate.
+# Override per-host values in inventory, not here.
 
-# Go installation
-node_go_version: "1.23.0"
+# Go installation (references chain.yml go_version)
+node_go_version: "{{ go_version | default('1.23.0') }}"
 node_go_arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
 node_go_download_url: "https://go.dev/dl/go{{ node_go_version }}.linux-{{ node_go_arch }}.tar.gz"
 
-# Cosmovisor
-node_cosmovisor_version: "v1.5.0"
+# Cosmovisor (references chain.yml cosmovisor_version)
+node_cosmovisor_version: "{{ cosmovisor_version | default('v1.5.0') }}"
 
-# Daemon configuration
-node_daemon_name: "aurad"
-node_daemon_user: "ubuntu"
-node_daemon_group: "ubuntu"
+# Daemon configuration (references chain.yml)
+node_daemon_name: "{{ daemon_name | default('aurad') }}"
+node_daemon_user: "{{ daemon_user | default('ubuntu') }}"
+node_daemon_group: "{{ daemon_group | default('ubuntu') }}"
 node_daemon_home: "/home/{{ node_daemon_user }}/.aura-mvp-{{ node_name }}"
 
-# Chain configuration
-node_chain_id: "aura-mvp-1"
-node_bech_prefix: "aura"
-node_staking_denom: "uaura"
+# Chain configuration (references chain.yml)
+node_chain_id: "{{ chain_id | default('aura-mvp-1') }}"
+node_bech_prefix: "{{ chain_bech32_prefix | default('aura') }}"
+node_staking_denom: "{{ chain_staking_denom | default('uaura') }}"
 node_name: "val1"
 node_type: "val"  # val or sentry
 node_number: 1
 
-# Network ports (standard Cosmos ports with offsets)
-node_rpc_port: 26657
-node_p2p_port: 26656
-node_grpc_port: 9090
-node_api_port: 1317
-node_pprof_port: 6060
+# Network ports (references chain.yml ports object as defaults)
+node_rpc_port: "{{ ports.rpc | default(26657) }}"
+node_p2p_port: "{{ ports.p2p | default(26656) }}"
+node_grpc_port: "{{ ports.grpc | default(9090) }}"
+node_api_port: "{{ ports.api | default(1317) }}"
+node_pprof_port: "{{ ports.pprof | default(6060) }}"
 
-# Artifact URLs
-node_genesis_url: "https://artifacts.aurablockchain.org/aura-mvp-1/genesis.json"
-node_peers_url: "https://artifacts.aurablockchain.org/aura-mvp-1/peers.txt"
+# Artifact URLs (references chain.yml)
+node_genesis_url: "{{ genesis_url | default('https://artifacts.aurablockchain.org/' + chain_id + '/genesis.json') }}"
+node_peers_url: "{{ peers_url | default('https://artifacts.aurablockchain.org/' + chain_id + '/peers.txt') }}"
 
 # Binary source (set one of these)
 node_binary_url: ""  # URL to download aurad binary
