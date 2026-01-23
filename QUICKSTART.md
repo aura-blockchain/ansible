@@ -10,12 +10,12 @@ ansible-playbook -i inventory/testnet.yml playbooks/health-check.yml
 ### Update Binary (Rolling)
 ```bash
 # 1. Build locally
-cd ~/blockchain-projects/aura-project/aura && make build
+cd ~/blockchain-projects/aura && make build
 
 # 2. Deploy via Ansible
-cd ~/blockchain-projects/aura-project/infra/ansible
+cd ~/blockchain-projects/aura-ansible
 ansible-playbook -i inventory/testnet.yml playbooks/update-binaries.yml \
-  -e "local_binary_path=../../aura/build/aurad"
+  -e "local_binary_path=../aura/build/aurad"
 ```
 
 ### Rollback (If Something Breaks)
